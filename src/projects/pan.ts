@@ -19,18 +19,27 @@ const axis = (): Axis => ({ value: 0, want: 0, velocity: 0, min: 0, max: 0 })
 const clamp = (a: Axis, v: number) => Math.min(Math.max(v, a.min), a.max)
 
 /**
- * Sliding a flat sheet about on two axes with a finger or the mouse wheel: it follows the
- * finger, coasts when flung, gives a little past its edges and springs back. Pure motion in
- * world units; the scene reads `x` and `y` each frame.
+ * Sliding a flat sheet about on two axes with a finger or the mouse wheel, and bringing it
+ * nearer or farther with a pinch: it follows the fingers, coasts when flung, gives a little
+ * past its edges and springs back. Pure motion in world units; the scene reads `x`, `y` and
+ * `depth` each frame.
  */
 export function createPan() {
   const x = axis()
   const y = axis()
+  // how far the sheet is from the eye: pinching changes it, within a range
+  const depth = axis()
   let dragging = false
+  let pinching = false
+  let pinchDistance = 1
+  let pinchDepth = 1
   let samples: { t: number; x: number; y: number }[] = []
 
-  const step = (a: Axis, dt: number) => {
-    if (dragging) {
+  // a value pushed past its range gives way only partly, like a drag past an edge
+  const give = (a: Axis, v: number) => (v < a.min ? a.min - (a.min - v) * EDGE_GIVE : v > a.max ? a.max + (v - a.max) * EDGE_GIVE : v)
+
+  const step = (a: Axis, dt: number, held: boolean) => {
+    if (held) {
       a.value += (a.want - a.value) * (1 - Math.exp(-dt * FOLLOW))
       return
     }
@@ -58,6 +67,37 @@ export function createPan() {
     },
     get y() {
       return y.value
+    },
+    get depth() {
+      return depth.value
+    },
+    /** Where the pinch has put the depth, which the drawn depth is still catching up with. */
+    get wantedDepth() {
+      return depth.want
+    },
+    /** How near and how far the sheet may be brought, and where it starts. */
+    setDepthRange(min: number, max: number, start: number) {
+      depth.min = min
+      depth.max = max
+      depth.value = depth.want = start
+    },
+    /** Two fingers are down, this far apart (px). */
+    beginPinch(distance: number) {
+      pinching = true
+      pinchDistance = Math.max(distance, 1)
+      pinchDepth = depth.want
+    },
+    /** The fingers are now this far apart: spreading them brings the sheet nearer. */
+    pinch(distance: number) {
+      if (!pinching) return
+      depth.want = give(depth, (pinchDepth * pinchDistance) / Math.max(distance, 1))
+    },
+    endPinch() {
+      pinching = false
+    },
+    /** A zoom step from a trackpad pinch or a wheel: `factor` above 1 moves the sheet away. */
+    zoomBy(factor: number) {
+      depth.value = depth.want = clamp(depth, depth.value * factor)
     },
     /** How far the sheet may slide each way; it may be dragged a little past these. */
     setBounds(minX: number, maxX: number, minY: number, maxY: number) {
@@ -99,8 +139,9 @@ export function createPan() {
       x.velocity = y.velocity = 0
     },
     update(dt: number) {
-      step(x, dt)
-      step(y, dt)
+      step(x, dt, dragging)
+      step(y, dt, dragging)
+      step(depth, dt, pinching)
     },
   }
 }

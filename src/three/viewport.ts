@@ -26,6 +26,14 @@ export function installViewport() {
   sync()
   window.addEventListener('resize', sync)
   window.addEventListener('scroll', sync)
+
+  // The page never zooms: a pinch belongs to the scene (the grid of projects). iOS ignores
+  // the viewport's say on this, so multi-finger moves and Safari's gesture events are refused
+  // here, which also keeps the browser from cancelling the scene's pointer events mid-pinch.
+  const refuse = (e: Event) => e.preventDefault()
+  window.addEventListener('touchmove', (e) => e.touches.length > 1 && e.preventDefault(), { passive: false })
+  window.addEventListener('gesturestart', refuse)
+  window.addEventListener('gesturechange', refuse)
 }
 
 const size = new THREE.Vector2()

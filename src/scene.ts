@@ -32,7 +32,10 @@ const WHEEL_RADIUS = 2.6
 const WHEEL_SINK = 1.2
 // The grid of projects: cards lying flat this far below the camera, which looks straight
 // down at them, this many across, drawn at this share of their ring size, this far apart.
+// A pinch brings them nearer or farther, between the two shares of that depth.
 const GRID_DEPTH = 6.2
+const GRID_NEAREST = 0.45
+const GRID_FARTHEST = 1.8
 const GRID_COLUMNS = 3
 const GRID_CARD_SCALE = 0.62
 const GRID_GAP = 0.3
@@ -152,6 +155,7 @@ export function createScene(
   }
   // and on the grid below, which slides about under the finger
   const pan = createPan()
+  pan.setDepthRange(GRID_DEPTH * GRID_NEAREST, GRID_DEPTH * GRID_FARTHEST, GRID_DEPTH)
   const gridRows = Math.ceil(count / GRID_COLUMNS)
   const gridPitchX = cardWidth * GRID_CARD_SCALE + GRID_GAP
   const gridPitchZ = cardHeight * GRID_CARD_SCALE + GRID_GAP
@@ -171,7 +175,7 @@ export function createScene(
     // looking down, up on the screen is toward negative z, so the first row goes there
     gridPosition.set(
       (column - (GRID_COLUMNS - 1) / 2) * gridPitchX + pan.x,
-      -GRID_DEPTH,
+      -pan.depth,
       (row - (gridRows - 1) / 2) * gridPitchZ + pan.y,
     )
   }
@@ -231,12 +235,35 @@ export function createScene(
   let pressId: number | null = null
   let lastDragX = 0
   let lastDragY = 0
+  // every finger on the screen; two of them over the grid make a pinch
+  const fingers = new Map<number, { x: number; y: number }>()
+  let pinching = false
+  // set for the rest of a touch that pinched at any point: lifting its last finger is no tap
+  let pinched = false
+  let lastMidX = 0
+  let lastMidY = 0
   // world units a pixel of finger travel moves something `distance` away
   const worldPerPixel = (distance: number) => (2 * distance * Math.tan(degToRad(visibleFov / 2))) / window.innerHeight
+  const pinchGeometry = () => {
+    const [a, b] = [...fingers.values()]
+    return { distance: Math.hypot(a.x - b.x, a.y - b.y), midX: (a.x + b.x) / 2, midY: (a.y + b.y) / 2 }
+  }
   let tapped = false
   // where the tap landed, in the camera's -1..1 coordinates
   const tapAt = new THREE.Vector2()
   const onPress = (e: PointerEvent) => {
+    fingers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (fingers.size === 1) pinched = false
+    if (showGrid && detail === null && fingers.size === 2) {
+      // a second finger over the grid: from here on the pair pinches and slides together
+      const { distance, midX, midY } = pinchGeometry()
+      pinching = pinched = true
+      pan.beginPinch(distance)
+      pan.beginDrag(e.timeStamp)
+      lastMidX = midX
+      lastMidY = midY
+      return
+    }
     if (pressId !== null) return
     pressId = e.pointerId
     pressX = e.clientX
@@ -247,6 +274,29 @@ export function createScene(
     if (showGrid && detail === null) pan.beginDrag(e.timeStamp)
   }
   const onDrag = (e: PointerEvent) => {
+    const finger = fingers.get(e.pointerId)
+    if (finger) {
+      finger.x = e.clientX
+      finger.y = e.clientY
+    }
+    if (pinching && fingers.size >= 2) {
+      const { distance, midX, midY } = pinchGeometry()
+      // zoom about the point between the fingers: as the depth changes, slide the grid so
+      // the card under that point stays under it; then follow the pair's own movement
+      const before = pan.wantedDepth
+      pan.pinch(distance)
+      const after = pan.wantedDepth
+      const perDepth = (2 * Math.tan(degToRad(visibleFov / 2))) / window.innerHeight
+      const unit = worldPerPixel(after)
+      pan.drag(
+        (midX - lastMidX) * unit + (midX - window.innerWidth / 2) * perDepth * (after - before),
+        (midY - lastMidY) * unit + (midY - window.innerHeight / 2) * perDepth * (after - before),
+        e.timeStamp,
+      )
+      lastMidX = midX
+      lastMidY = midY
+      return
+    }
     if (e.pointerId !== pressId) return
     if (showWheel && detail === null) {
       // the wheel turns with the finger: a pixel of travel moves the front card a pixel
@@ -254,29 +304,52 @@ export function createScene(
     }
     if (showGrid && detail === null) {
       // the grid slides under the finger; down the screen is away from the viewer
-      const unit = worldPerPixel(GRID_DEPTH)
+      const unit = worldPerPixel(pan.depth)
       pan.drag((e.clientX - lastDragX) * unit, (e.clientY - lastDragY) * unit, e.timeStamp)
     }
     lastDragX = e.clientX
     lastDragY = e.clientY
   }
   const onRelease = (e: PointerEvent) => {
+    fingers.delete(e.pointerId)
+    if (pinching) {
+      if (fingers.size >= 2) return
+      // the pinch is over; a finger still down carries on sliding the grid by itself
+      pinching = false
+      pan.endPinch()
+      const [left] = [...fingers.entries()]
+      if (left) {
+        const [id, finger] = left
+        pressId = id
+        pressX = lastDragX = finger.x
+        pressY = lastDragY = finger.y
+        pan.beginDrag(e.timeStamp)
+        return
+      }
+      pressId = null
+      pan.endDrag(e.timeStamp)
+      return
+    }
     if (e.pointerId !== pressId) return
     pressId = null
     wheel.endDrag(e.timeStamp)
     pan.endDrag(e.timeStamp)
-    if (Math.hypot(e.clientX - pressX, e.clientY - pressY) < 8) {
+    if (!pinched && Math.hypot(e.clientX - pressX, e.clientY - pressY) < 8) {
       tapped = true
       // the canvas is bled above and below the screen (see three/viewport.ts)
       tapAt.set((e.clientX / window.innerWidth) * 2 - 1, 1 - ((e.clientY + BLEED) / (window.innerHeight + 2 * BLEED)) * 2)
     }
   }
   const onWheel = (e: WheelEvent) => {
+    // the page never scrolls or zooms itself; the wheel belongs to the scene
+    e.preventDefault()
     if (detail !== null) return
     const lines = e.deltaMode === 1 ? 16 : 1
     if (showWheel) wheel.scroll(e.deltaY * lines, e.timeStamp)
     if (showGrid) {
-      const unit = worldPerPixel(GRID_DEPTH)
+      // a trackpad pinch arrives as a wheel with ctrl held
+      if (e.ctrlKey) return pan.zoomBy(Math.exp(e.deltaY * lines * 0.004))
+      const unit = worldPerPixel(pan.depth)
       pan.nudge(-e.deltaX * lines * unit, -e.deltaY * lines * unit)
     }
   }
@@ -284,7 +357,7 @@ export function createScene(
   canvas.addEventListener('pointermove', onDrag)
   canvas.addEventListener('pointerup', onRelease)
   canvas.addEventListener('pointercancel', onRelease)
-  canvas.addEventListener('wheel', onWheel, { passive: true })
+  canvas.addEventListener('wheel', onWheel, { passive: false })
 
   const closeDetail = () => {
     if (detail === null) return
