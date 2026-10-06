@@ -83,6 +83,9 @@ export function createScene(
   })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.autoClear = false
+  // the toon-shaded models in the write-ups cast shadows on themselves; nothing else casts any,
+  // so the main scene never draws a shadow map
+  renderer.shadowMap.enabled = true
 
   const scene = new THREE.Scene()
   const camera = new THREE.PerspectiveCamera(FOV, 1, 0.05, 100)
@@ -105,9 +108,9 @@ export function createScene(
   scene.environment = environment
 
   // the 3D models set into the write-ups, drawn behind the page while a card is open
-  const inserts = createInserts(renderer, environment)
+  const inserts = createInserts(renderer)
   const insertsAmount = new Spring()
-  setTimeout(() => inserts.preload(projects.flatMap((project) => project.inserts ?? []).map((insert) => insert.model)), 1500)
+  setTimeout(() => inserts.preload(projects.flatMap((project) => project.inserts ?? [])), 1500)
 
   // the logo above the company name, moving together
   const brand = new THREE.Group()

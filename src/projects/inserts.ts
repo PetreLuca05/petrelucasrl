@@ -2,6 +2,8 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js'
 import { BLEED } from '../three/viewport.ts'
+import { applyToonToModel, type ToonEntry } from '../toon/toon.ts'
+import { toonTexturesLoaded, unityToonMaterials } from '../toon/unity.ts'
 import type { Insert } from './data.ts'
 
 const FOV = 32
@@ -14,6 +16,12 @@ const HOLD_MIN = 2.5
 const HOLD_MAX = 6
 // ...then blends into the next over this long
 const BLEND = 0.5
+// The player's bounding radius in its own units, which are Unity metres. Every model is drawn
+// the same size, so each counts its own radius as this many metres and gets outlines as heavy.
+const PLAYER_RADIUS = 2.43
+// the light every model is lit by: Unity's white sun at intensity 1, casting shadows
+const LIGHT_POSITION = new THREE.Vector3(2, 4, 3)
+const SHADOW_MAP = 1024
 
 type Loaded = { scene: THREE.Group; clips: THREE.AnimationClip[] }
 
@@ -37,7 +45,7 @@ const hold = () => HOLD_MIN + Math.random() * (HOLD_MAX - HOLD_MIN)
  * text flows around it; every frame the box is measured and the model is drawn into exactly
  * that patch of the canvas behind the page, so the whole site still has one renderer.
  */
-export function createInserts(renderer: THREE.WebGLRenderer, environment: THREE.Texture) {
+export function createInserts(renderer: THREE.WebGLRenderer) {
   const loader = new GLTFLoader()
   const cache = new Map<string, Promise<Loaded>>()
   let slots: Slot[] = []
@@ -46,16 +54,21 @@ export function createInserts(renderer: THREE.WebGLRenderer, environment: THREE.
   const box = new THREE.Box3()
   const sphere = new THREE.Sphere()
 
-  // a model loaded once, centred on the origin and scaled to fit a unit sphere
-  const load = (url: string) => {
+  // a model loaded once, toon shaded, centred on the origin and scaled to fit a unit sphere
+  const load = (insert: Insert) => {
+    const url = insert.model
     let loaded = cache.get(url)
     if (!loaded) {
-      loaded = loader.loadAsync(url).then((gltf) => {
+      loaded = loader.loadAsync(url).then(async (gltf) => {
         box.setFromObject(gltf.scene).getBoundingSphere(sphere)
+        const table: Record<string, ToonEntry> = {}
+        for (const [name, unity] of Object.entries(insert.toon ?? {})) table[name] = unityToonMaterials[unity]
+        applyToonToModel(gltf.scene, table, { metre: insert.toon ? 1 : sphere.radius / PLAYER_RADIUS, fallback: 'derive' })
         const holder = new THREE.Group()
         gltf.scene.position.sub(sphere.center)
         holder.add(gltf.scene)
         holder.scale.setScalar(1 / Math.max(sphere.radius, 1e-3))
+        await toonTexturesLoaded()
         return { scene: holder, clips: gltf.animations }
       })
       cache.set(url, loaded)
@@ -65,19 +78,29 @@ export function createInserts(renderer: THREE.WebGLRenderer, environment: THREE.
 
   return {
     /** Fetch models ahead of time, so they are there when their write-up opens. */
-    preload(urls: string[]) {
-      for (const url of urls) load(url).catch(() => {})
+    preload(inserts: Insert[]) {
+      for (const insert of inserts) load(insert).catch(() => {})
     },
     /** The boxes of the write-up now on the page, in order, and the text column that clips them. */
     set(items: { element: HTMLElement; insert: Insert }[], clip: HTMLElement) {
       list = clip
+      // each write-up's models have their own lights and shadow maps; let the old ones go
+      for (const slot of slots) slot.scene.traverse((object) => (object as THREE.Light).isLight && (object as THREE.Light).dispose())
       slots = items.map(({ element, insert }) => {
-        // soft studio light, kept gentle so pale colours stay colours rather than washing out
+        // the toon shader reads only the first directional light, so that is all there is
         const scene = new THREE.Scene()
-        scene.environment = environment
-        scene.environmentIntensity = 0.7
-        const light = new THREE.DirectionalLight(0xffffff, 0.9)
-        light.position.set(2, 4, 3)
+        const light = new THREE.DirectionalLight(0xffffff, 1)
+        light.position.copy(LIGHT_POSITION)
+        light.castShadow = true
+        light.shadow.mapSize.set(SHADOW_MAP, SHADOW_MAP)
+        // the model fits a unit sphere, a little more while it pops in
+        const shadow = light.shadow.camera
+        shadow.left = shadow.bottom = -1.3
+        shadow.right = shadow.top = 1.3
+        shadow.near = LIGHT_POSITION.length() - 1.5
+        shadow.far = LIGHT_POSITION.length() + 1.5
+        light.shadow.bias = -0.0005
+        light.shadow.normalBias = 0.02
         scene.add(light)
         const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 20)
         // a little above the model, far enough back for the unit sphere to fit the box
@@ -88,7 +111,7 @@ export function createInserts(renderer: THREE.WebGLRenderer, environment: THREE.
         root.rotation.y = insert.turn ?? 0
         scene.add(root)
         const slot: Slot = { element, insert, scene, camera, root, mixer: null, actions: [], current: 0, hold: 0 }
-        load(insert.model)
+        load(insert)
           .then((loaded) => {
             // the write-up may have changed while the model was loading
             if (!slots.includes(slot)) return
