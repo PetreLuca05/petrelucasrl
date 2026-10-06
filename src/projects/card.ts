@@ -29,8 +29,8 @@ const BACK_SHADE = 0.08
 // how much a card that is not the chosen one is shaded on the wheel (0 none, 1 black)
 const DIM = 0.18
 
-/** The arrangement the cards are in: around the viewer, or on the wheel in front. */
-export type CardShape = 'ring' | 'wheel'
+/** The arrangement the cards are in: around the viewer, on the wheel in front, or flat on the grid. */
+export type CardShape = 'ring' | 'wheel' | 'flat'
 
 const photoVertex = /* glsl */ `
   #include <morphtarget_pars_vertex>
@@ -173,7 +173,7 @@ export function createCard(
   project: Project,
   index: number,
   width: number,
-  radii: Record<CardShape, number>,
+  radii: Record<'ring' | 'wheel', number>,
   renderer?: THREE.WebGLRenderer,
 ) {
   const height = width / 2
@@ -208,9 +208,11 @@ export function createCard(
   const bodyFlat = new THREE.PlaneGeometry(width, height, SEGMENTS, SEGMENTS / 2)
   const photoFlat = new THREE.PlaneGeometry(photoW, photoH, SEGMENTS / 2, SEGMENTS / 2)
   photoFlat.translate(((PHOTO.x + PHOTO.w / 2) / CANVAS_W - 0.5) * width, (0.5 - (PHOTO.y + PHOTO.h / 2) / CANVAS_H) * height, 0)
-  const shapes = {
+  const shapes: Record<CardShape, { body: THREE.BufferGeometry; photo: THREE.BufferGeometry }> = {
     ring: { body: bend(bodyFlat, radii.ring, 'ring'), photo: bend(photoFlat, radii.ring, 'ring') },
     wheel: { body: bend(bodyFlat, radii.wheel, 'wheel'), photo: bend(photoFlat, radii.wheel, 'wheel') },
+    // as good as flat: bent to a circle far too large to notice, so it has the same morph target
+    flat: { body: bend(bodyFlat, 1e6, 'ring'), photo: bend(photoFlat, 1e6, 'ring') },
   }
 
   // both sides are drawn, so the cards on the far side of the wheel show their backs, which
@@ -304,7 +306,7 @@ export function createCard(
       body.material.color.setScalar(level)
       photoMaterial.uniforms.uDim.value = level
     },
-    /** Bend the card to the ring or to the wheel. Only call while the card is out of sight. */
+    /** Bend the card to the ring or the wheel, or lay it flat. Only call while the card is out of sight. */
     setShape(shape: CardShape) {
       body.geometry = shapes[shape].body
       photoMesh.geometry = shapes[shape].photo

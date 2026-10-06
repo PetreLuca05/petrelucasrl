@@ -11,7 +11,7 @@ import { setPageColor } from './three/viewport.ts'
 // The address tracks where you are: '' is the landing, '#projects' the ring of cards and
 // '#projects/2' an open card. Each step is a history entry, so the browser's back button
 // goes from an open card to the ring, and from the ring to the landing.
-const OPEN_CARD = /^#(projects|wheel)\/\d+$/
+const OPEN_CARD = /^#(projects|wheel|grid)\/\d+$/
 
 // A load always starts from the landing, whatever the address says. Otherwise a reload (or
 // the browser restoring the tab) in the projects would play the whole entrance by itself,
@@ -25,7 +25,13 @@ function subscribe(onChange: () => void) {
 
 export default function App() {
   const hash = useSyncExternalStore(subscribe, () => window.location.hash)
-  const view: View = hash.startsWith('#projects') ? 'projects' : hash.startsWith('#wheel') ? 'wheel' : 'landing'
+  const view: View = hash.startsWith('#projects')
+    ? 'projects'
+    : hash.startsWith('#wheel')
+      ? 'wheel'
+      : hash.startsWith('#grid')
+        ? 'grid'
+        : 'landing'
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const sceneRef = useRef<ReturnType<typeof createScene> | null>(null)
@@ -127,8 +133,8 @@ export default function App() {
     setWrapped(!wrapped)
   }
 
-  // 'projects' is the ring of cards (Projects 0), 'wheel' the wheel of cards (Projects 1)
-  const openProjects = (e: MouseEvent, target: 'projects' | 'wheel') => {
+  // 'projects' is the ring of cards (Projects 0), 'wheel' the wheel (Projects 1), 'grid' the grid (Projects 2)
+  const openProjects = (e: MouseEvent, target: 'projects' | 'wheel' | 'grid') => {
     e.stopPropagation()
     requestMotionPermission()
     setWrapped(true)
@@ -222,12 +228,15 @@ export default function App() {
           <button className="pill" onClick={(e) => openProjects(e, 'wheel')}>
             Projects 1
           </button>
+          <button className="pill" onClick={(e) => openProjects(e, 'grid')}>
+            Projects 2
+          </button>
         </div>
       </div>
 
       <div ref={projectsRef} className="projects-ui">
         <div className="projects-top">
-          <span className="projects-title">{view === 'wheel' ? 'Projects 1' : 'Projects 0'}</span>
+          <span className="projects-title">{view === 'wheel' ? 'Projects 1' : view === 'grid' ? 'Projects 2' : 'Projects 0'}</span>
         </div>
         {/* the open card and its text lean and shake with the camera (see onSway) */}
         <div ref={floatRef} className="detail-float">

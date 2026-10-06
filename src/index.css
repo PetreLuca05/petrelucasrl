@@ -90,18 +90,23 @@ button {
 }
 
 .screen.projects,
-.screen.wheel {
+.screen.wheel,
+.screen.grid {
   cursor: grab;
 }
 
 .screen.projects:active,
-.screen.wheel:active {
+.screen.wheel:active,
+.screen.grid:active {
   cursor: grabbing;
 }
 
 .pills {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 10px;
+  padding: 0 16px;
 }
 
 /* Both sets of controls stay mounted and cross-fade with the view. */
@@ -127,7 +132,8 @@ button {
 
 /* the projects controls wait for the sphere to close around the view */
 .projects .projects-ui,
-.wheel .projects-ui {
+.wheel .projects-ui,
+.grid .projects-ui {
   opacity: 1;
   visibility: visible;
   transition: opacity 0.5s 0.9s;
