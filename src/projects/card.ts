@@ -24,6 +24,10 @@ const idle = (work: () => void) => {
 
 // how finely a card is tessellated, so it can bend smoothly
 const SEGMENTS = 24
+// how bright the back of a card is, as a share of its face (0 black)
+const BACK_SHADE = 0.08
+// how much a card that is not the chosen one is shaded on the wheel (0 none, 1 black)
+const DIM = 0.18
 
 /** The arrangement the cards are in: around the viewer, or on the wheel in front. */
 export type CardShape = 'ring' | 'wheel'
@@ -83,6 +87,8 @@ const photoFragment = /* glsl */ `
   }
 
   void main() {
+    // the photo is on the face only; the back of the card is plain
+    if (!gl_FrontFacing) discard;
     vec3 a = texture2D(uA, cover(vUv, uAspectA)).rgb;
     vec3 b = texture2D(uB, cover(vUv, uAspectB)).rgb;
 
@@ -207,11 +213,17 @@ export function createCard(
     wheel: { body: bend(bodyFlat, radii.wheel, 'wheel'), photo: bend(photoFlat, radii.wheel, 'wheel') },
   }
 
-  // both sides are drawn, so the cards on the far side of the wheel show their backs
-  const body = new THREE.Mesh(
-    shapes.ring.body,
-    new THREE.MeshBasicMaterial({ map: cardTexture, alphaTest: 0.5, side: THREE.DoubleSide }),
-  )
+  // both sides are drawn, so the cards on the far side of the wheel show their backs, which
+  // are near-black (the face's picture only shows through faintly)
+  const bodyMaterial = new THREE.MeshBasicMaterial({ map: cardTexture, alphaTest: 0.5, side: THREE.DoubleSide })
+  bodyMaterial.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <map_fragment>',
+      `#include <map_fragment>
+      if (!gl_FrontFacing) diffuseColor.rgb *= ${BACK_SHADE.toFixed(3)};`,
+    )
+  }
+  const body = new THREE.Mesh(shapes.ring.body, bodyMaterial)
   body.updateMorphTargets()
   group.add(body)
 
@@ -288,7 +300,7 @@ export function createCard(
     },
     /** Darken the card, 0 not at all to 1 fully, for the ones that are not chosen. */
     setDim(amount: number) {
-      const level = 1 - 0.4 * amount
+      const level = 1 - DIM * amount
       body.material.color.setScalar(level)
       photoMaterial.uniforms.uDim.value = level
     },
