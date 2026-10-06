@@ -9,6 +9,11 @@ const FOV = 32
 const EDGE = 56
 // radians per second, for models that turn on the spot
 const SPIN = 0.5
+// a model with several animations keeps one for between this long, in seconds...
+const HOLD_MIN = 2.5
+const HOLD_MAX = 6
+// ...then blends into the next over this long
+const BLEND = 0.5
 
 type Loaded = { scene: THREE.Group; clips: THREE.AnimationClip[] }
 
@@ -19,7 +24,13 @@ type Slot = {
   camera: THREE.PerspectiveCamera
   root: THREE.Group
   mixer: THREE.AnimationMixer | null
+  // the model's animations, the one playing now, and how long until it changes its mind
+  actions: THREE.AnimationAction[]
+  current: number
+  hold: number
 }
+
+const hold = () => HOLD_MIN + Math.random() * (HOLD_MAX - HOLD_MIN)
 
 /**
  * 3D models set into a project's write-up. The page leaves an empty box for each one and the
@@ -76,18 +87,22 @@ export function createInserts(renderer: THREE.WebGLRenderer, environment: THREE.
         const root = new THREE.Group()
         root.rotation.y = insert.turn ?? 0
         scene.add(root)
-        const slot: Slot = { element, insert, scene, camera, root, mixer: null }
+        const slot: Slot = { element, insert, scene, camera, root, mixer: null, actions: [], current: 0, hold: 0 }
         load(insert.model)
           .then((loaded) => {
             // the write-up may have changed while the model was loading
             if (!slots.includes(slot)) return
             const model = cloneSkeleton(loaded.scene)
             root.add(model)
-            if (insert.animation) {
-              const clip = THREE.AnimationClip.findByName(loaded.clips, insert.animation) ?? loaded.clips[0]
-              if (clip) {
+            const names = [insert.animation ?? []].flat()
+            if (names.length) {
+              const clips = names.map((name) => THREE.AnimationClip.findByName(loaded.clips, name)).filter((c) => c != null)
+              if (!clips.length && loaded.clips[0]) clips.push(loaded.clips[0])
+              if (clips.length) {
                 slot.mixer = new THREE.AnimationMixer(model)
-                slot.mixer.clipAction(clip).play()
+                slot.actions = clips.map((clip) => slot.mixer!.clipAction(clip))
+                slot.actions[0].play()
+                slot.hold = hold()
               }
             }
           })
@@ -114,6 +129,18 @@ export function createInserts(renderer: THREE.WebGLRenderer, environment: THREE.
         if (scale < 0.01) continue
 
         slot.mixer?.update(dt)
+        if (slot.actions.length > 1) {
+          slot.hold -= dt
+          if (slot.hold <= 0) {
+            // move on to any of the other animations, fading this one out as that one fades in
+            const from = slot.actions[slot.current]
+            slot.current = (slot.current + 1 + Math.floor(Math.random() * (slot.actions.length - 1))) % slot.actions.length
+            const to = slot.actions[slot.current]
+            to.reset().play()
+            from.crossFadeTo(to, BLEND, false)
+            slot.hold = BLEND + hold()
+          }
+        }
         if (slot.insert.spin) slot.root.rotation.y += dt * SPIN
         slot.root.scale.setScalar(scale)
         slot.camera.aspect = rect.width / rect.height
