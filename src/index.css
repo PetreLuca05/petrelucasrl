@@ -1,0 +1,410 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* The page is 140px taller than the screen at each end and stays scrolled 140px down
+   (see three/viewport.ts), so the scene continues behind iOS Safari's translucent bars. */
+html {
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar {
+  display: none;
+}
+
+body {
+  position: relative;
+  height: calc(var(--vh, 100vh) + 280px);
+  overflow: hidden;
+  background: #000;
+  color: #fff;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-weight: 700;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.screen,
+.layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.pill {
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  padding: 14px 26px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  /* a plain tint, not a backdrop blur: blurring the moving scene behind the button every
+     frame is one of the most expensive things a phone can be asked to draw */
+  background: rgba(255, 255, 255, 0.14);
+  pointer-events: auto;
+  transition:
+    background 0.2s,
+    transform 0.2s;
+}
+
+.pill:active {
+  transform: scale(0.97);
+}
+
+.hint {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  opacity: 0.75;
+  animation: pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* The scene draws its own backdrop (see three/sphere.ts), so the canvas is opaque and nothing
+   has to be composited behind it. */
+
+.screen.landing {
+  cursor: pointer;
+}
+
+.screen.projects,
+.screen.wheel {
+  cursor: grab;
+}
+
+.screen.projects:active,
+.screen.wheel:active {
+  cursor: grabbing;
+}
+
+.pills {
+  display: flex;
+  gap: 10px;
+}
+
+/* Both sets of controls stay mounted and cross-fade with the view. */
+
+.landing-ui,
+.projects-ui {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.4s,
+    visibility 0s 0.4s,
+    color 0.6s 0.5s;
+}
+
+.landing .landing-ui {
+  opacity: 1;
+  visibility: visible;
+  /* the colour flips while the view is at its whitest */
+  transition:
+    opacity 0.4s 0.3s,
+    color 0.6s 0.5s;
+}
+
+/* the projects controls wait for the sphere to close around the view */
+.projects .projects-ui,
+.wheel .projects-ui {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.5s 0.9s;
+}
+
+.wrapped .landing-ui,
+.projects-ui {
+  color: #111;
+}
+
+.wrapped .pill {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* Landing */
+
+.landing-ui {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: max(28px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  pointer-events: none;
+}
+
+/* Projects */
+
+/* Placed in the page rather than fixed to the viewport, like the text list: only page content
+   is drawn behind iOS Safari's bars, so the label can scroll on up to the real top edge of
+   the screen and be cut off there. */
+.projects-top {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: calc(var(--bleed, 140px) + max(14px, env(safe-area-inset-top)));
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.projects-title {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  /* scrolls up and off the screen with an open card's text; the card below rises with it at
+     first, then stops and collapses while the label carries on */
+  transform: translateY(calc(-1 * var(--detail-away, 0px)));
+}
+
+/* Opened project: the card flies to the top (see scene.ts) and its write-up scrolls below it. */
+
+/* The page's copy of the open card. It appears exactly over the 3D card once that has landed.
+   From then on, as the text scrolls, .detail-head rises by --detail-rise and then .detail-card
+   loses --detail-lost of its height. The card's contents are sized in em, so they shrink with
+   the card's font-size. Sizes derive from the card's width so it matches the 3D card, which
+   is drawn on a 1024-wide canvas: --u is one canvas pixel, 1em is 100 of them. */
+/* Holds the open card and its text. It is as large as the page, so its centre is the centre
+   of the screen, and the scene gives it the camera's lean and shake as a transform. Its
+   contents are placed in the page (hence --bleed) rather than fixed to the viewport, since a
+   transformed parent would capture fixed children anyway. */
+.detail-float {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+.detail-head {
+  --u: calc(var(--detail-width, 300px) / 1024);
+  position: absolute;
+  left: calc(50% - var(--detail-width, 300px) / 2);
+  top: calc(var(--bleed, 140px) + 72px - var(--detail-rise, 0px));
+  width: var(--detail-width, 300px);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s,
+    visibility 0s 0.2s;
+}
+
+/* 0.7s is about how long the 3D card's flight takes to settle (the `flight` spring in scene.ts) */
+.detail .detail-head {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.15s 0.7s;
+}
+
+.detail-card {
+  height: calc(var(--detail-card, 150px) - var(--detail-lost, 0px));
+  font-size: calc(100 * var(--u) * (1 - 0.2 * var(--detail-progress, 0)));
+  display: flex;
+  /* the photo and text draw closer together as the card collapses */
+  gap: calc(40 * var(--u) * (1 - 0.5 * var(--detail-progress, 0)));
+  /* with the 1px border this puts the contents exactly where the 3D card draws them */
+  padding: calc(32 * var(--u) - 1px);
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid rgba(17, 17, 17, 0.16);
+  border-radius: calc(44 * var(--u));
+}
+
+/* A picture of the 3D card itself (its name, description and number), covering the live text
+   underneath while the card is at full size. The page's copy is therefore identical to the
+   3D card at the moment one takes over from the other; the picture fades away as soon as the
+   card starts to collapse and the live text has to take over. */
+.detail-card-image {
+  position: absolute;
+  inset: -1px;
+  width: calc(100% + 2px);
+  height: calc(100% + 2px);
+  z-index: 1;
+  opacity: calc(1 - 5 * var(--detail-progress, 0));
+}
+
+/* The photo keeps its 6:7 shape as the card loses height. Its size is spelled out from the
+   card's height (minus padding and border) because Safari does not reliably size a flex item
+   from a percentage height plus aspect-ratio. */
+.detail-photo {
+  --photo-height: calc(var(--detail-card, 150px) - var(--detail-lost, 0px) - 64 * var(--u));
+  position: relative;
+  z-index: 2;
+  flex: none;
+  width: calc(var(--photo-height) * 6 / 7);
+  height: var(--photo-height);
+  overflow: hidden;
+  border-radius: calc(20 * var(--u));
+  background: #d6d8dc;
+}
+
+.detail-photo img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 1.2s;
+}
+
+.detail-photo img.on {
+  opacity: 1;
+}
+
+.detail-text {
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* the project number folds away as the card collapses */
+.detail-text span {
+  display: block;
+  overflow: hidden;
+  max-height: calc(1.5em * (1 - var(--detail-progress, 0)));
+  margin-top: calc(0.85em * (1 - var(--detail-progress, 0)));
+  opacity: calc(1 - var(--detail-progress, 0));
+  font-size: 0.28em;
+  letter-spacing: 0.28em;
+  color: rgba(17, 17, 17, 0.45);
+}
+
+.detail-text h2 {
+  margin: 0.26em 0 0;
+  font-size: 0.68em;
+  line-height: 1.08;
+}
+
+.detail-text p {
+  /* tightens under the name as the card collapses */
+  margin: calc(0.58em * (1 - 0.55 * var(--detail-progress, 0))) 0 0;
+  font-size: 0.38em;
+  line-height: 1.3;
+  color: rgba(17, 17, 17, 0.62);
+}
+
+/* Unlike the other controls the list is placed in the page, not fixed to the viewport: the
+   page continues below the viewport (--bleed, see three/viewport.ts) and only page content is
+   drawn behind iOS Safari's bottom bar. So the list, and its bottom fade, run down to the
+   real bottom of the screen (--under-bar below the viewport). */
+.detail-list {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--bleed, 140px) + var(--detail-top, 50%));
+  bottom: calc(var(--bleed, 140px) - var(--under-bar, 0px));
+  width: var(--detail-width, 92%);
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 0;
+  pointer-events: auto;
+  /* Not a native scroller: the column inside is moved by script (see projects/scroller.ts),
+     because on iOS a native scroll stops the gyroscope for as long as it lasts. touch-action
+     none keeps the system from treating the drag as a scroll. */
+  overflow: hidden;
+  touch-action: none;
+  /* text stays solid until just before the top and bottom edges */
+  -webkit-mask-image: linear-gradient(transparent, #000 22px, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(transparent, #000 22px, #000 calc(100% - 28px), transparent);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.3s,
+    visibility 0s 0.3s;
+}
+
+/* The column of text the scroller slides. Two spacers at its top (below) hold the first row
+   under the full-size card. The bottom padding lifts the last rows clear of the fade. */
+.detail-scroll {
+  padding: 0 0 calc(48px + var(--under-bar, 0px));
+  will-change: transform;
+  /* keeps the last floated model inside the column */
+  display: flow-root;
+}
+
+/* A 3D model set into the write-up: an empty box the text flows around. The scene draws the
+   model into this very patch of the canvas behind the page (see projects/inserts.ts). */
+.detail-model {
+  width: 46%;
+  aspect-ratio: 1;
+  margin: 2px 0 10px;
+}
+
+.detail-model.right {
+  float: right;
+  margin-left: 16px;
+}
+
+.detail-model.left {
+  float: left;
+  margin-right: 16px;
+}
+
+/* wait for the card to arrive before the text appears */
+.detail .detail-list {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.5s 0.45s;
+}
+
+/* while the header folds back out before closing, the text steps aside */
+.detail.closing .detail-list {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+/* Together these are as tall as the distance the card above can still rise and shrink (see
+   scene.ts), so the first row starts under the full-size card. */
+.detail-header-space {
+  display: flow-root;
+}
+
+.detail-rise-space {
+  height: var(--detail-rise-room, 0px);
+}
+
+.detail-collapse-space {
+  height: var(--detail-collapse, 0px);
+  margin-bottom: 20px;
+}
+
+.detail-list p {
+  margin: 0 0 16px;
+  padding: 0 4px;
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+/* the write-up opens with an enlarged first letter */
+.detail-header-space + p::first-letter {
+  float: left;
+  margin: 4px 8px 0 0;
+  font-size: 3.1em;
+  line-height: 0.8;
+}
