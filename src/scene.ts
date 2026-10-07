@@ -33,11 +33,13 @@ const WHEEL_SINK = 1.2
 // drawn at this share of their full size, this far apart.
 // A pinch brings them nearer or farther, between the two shares of that depth.
 const GRID_DEPTH = 6.2
+// how near the camera starts to the grid, as a share of GRID_DEPTH (pinching moves it on)
+const GRID_START = 0.7
 const GRID_NEAREST = 0.45
 const GRID_FARTHEST = 1.8
 const GRID_COLUMNS = 3
 const GRID_CARD_SCALE = 0.62
-const GRID_GAP = 0.3
+const GRID_GAP = 0.12
 // how many cards' width (and height) the grid may slide past its outermost cards
 const GRID_PAN_MARGIN = 1
 const MIN_HORIZONTAL_FOV = 58
@@ -147,7 +149,7 @@ export function createScene(
   }
   // and on the grid, which slides about under the finger
   const pan = createPan()
-  pan.setDepthRange(GRID_DEPTH * GRID_NEAREST, GRID_DEPTH * GRID_FARTHEST, GRID_DEPTH)
+  pan.setDepthRange(GRID_DEPTH * GRID_NEAREST, GRID_DEPTH * GRID_FARTHEST, GRID_DEPTH * GRID_START)
   const gridRows = Math.ceil(count / GRID_COLUMNS)
   const gridPitchX = cardWidth * GRID_CARD_SCALE + GRID_GAP
   const gridPitchZ = cardHeight * GRID_CARD_SCALE + GRID_GAP
@@ -163,12 +165,8 @@ export function createScene(
   const placeOnGrid = (i: number) => {
     const column = i % GRID_COLUMNS
     const row = Math.floor(i / GRID_COLUMNS)
-    // the first row at the top; a finger moving down (pan.y growing) moves the wall down
-    gridPosition.set(
-      (column - (GRID_COLUMNS - 1) / 2) * gridPitchX + pan.x,
-      -((row - (gridRows - 1) / 2) * gridPitchZ + pan.y),
-      -pan.depth,
-    )
+    // the first row at the top; the wall stays put and the camera moves over it (see the loop)
+    gridPosition.set((column - (GRID_COLUMNS - 1) / 2) * gridPitchX, -(row - (gridRows - 1) / 2) * gridPitchZ, -GRID_DEPTH)
   }
   // which arrangement the cards are in; only changes while none of them is showing
   let cardsMode: 'wheel' | 'grid' = 'wheel'
@@ -188,6 +186,8 @@ export function createScene(
   let cardsTime = 0
   let showWheel = false
   let showGrid = false
+  // how far the camera has moved over to the grid's pan, 0 to 1
+  let gridCamera = 0
   let focused: number | null = null
   let titleScale = 1
   // the open card: `detail` while it is open, `detailCard` until it has flown back home, and
@@ -435,6 +435,12 @@ export function createScene(
     const onTheGrid = cardsMode === 'grid'
     wheel.update(dt)
     pan.update(dt)
+    // On the grid, panning and pinching move the camera over the wall of cards: a finger
+    // moving down (pan.y growing) lifts the camera, so the wall follows the finger, and
+    // pan.depth is the camera's distance from the wall. Elsewhere the camera sits at the
+    // centre; it glides between the two as the view changes.
+    gridCamera = damp(gridCamera, view === 'grid' ? 1 : 0, 8, dt)
+    camera.position.set(-pan.x, pan.y, pan.depth - GRID_DEPTH).multiplyScalar(gridCamera)
 
     // the dome is always around the viewer, white with its grid, and the title always inked
     const uniforms = sphere.material.uniforms
