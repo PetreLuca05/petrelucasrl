@@ -9,8 +9,10 @@ import type { Insert } from './data.ts'
 const FOV = 32
 // a model is fully faded this far from the top and bottom edges of the text (CSS px)
 const EDGE = 56
-// radians per second, for models that turn on the spot
-const SPIN = 0.5
+// models that sway turn back and forth this far either side of their starting turn (radians)...
+const SWAY = 0.6
+// ...once every this many seconds; a sine, so it eases to a stop at each end
+const SWAY_PERIOD = 7
 // a model with several animations keeps one for between this long, in seconds...
 const HOLD_MIN = 2.5
 const HOLD_MAX = 6
@@ -36,6 +38,8 @@ type Slot = {
   actions: THREE.AnimationAction[]
   current: number
   hold: number
+  // how far through its sway the model is, in seconds, starting at a random point
+  sway: number
 }
 
 const hold = () => HOLD_MIN + Math.random() * (HOLD_MAX - HOLD_MIN)
@@ -110,7 +114,7 @@ export function createInserts(renderer: THREE.WebGLRenderer) {
         const root = new THREE.Group()
         root.rotation.y = insert.turn ?? 0
         scene.add(root)
-        const slot: Slot = { element, insert, scene, camera, root, mixer: null, actions: [], current: 0, hold: 0 }
+        const slot: Slot = { element, insert, scene, camera, root, mixer: null, actions: [], current: 0, hold: 0, sway: Math.random() * SWAY_PERIOD }
         load(insert)
           .then((loaded) => {
             // the write-up may have changed while the model was loading
@@ -164,7 +168,10 @@ export function createInserts(renderer: THREE.WebGLRenderer) {
             slot.hold = BLEND + hold()
           }
         }
-        if (slot.insert.spin) slot.root.rotation.y += dt * SPIN
+        if (slot.insert.spin) {
+          slot.sway += dt
+          slot.root.rotation.y = (slot.insert.turn ?? 0) + SWAY * Math.sin((slot.sway / SWAY_PERIOD) * Math.PI * 2)
+        }
         slot.root.scale.setScalar(scale)
         slot.camera.aspect = rect.width / rect.height
         slot.camera.updateProjectionMatrix()

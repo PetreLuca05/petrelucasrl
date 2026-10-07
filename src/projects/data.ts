@@ -12,7 +12,7 @@ export type Insert = {
    * wanders between them at random, blending smoothly from one to the next.
    */
   animation?: string | string[]
-  /** Turn slowly on the spot. */
+  /** Sway gently from side to side about its starting turn. */
   spin?: boolean
   /** Starting turn, in radians, for a model that looks better from an angle. */
   turn?: number
