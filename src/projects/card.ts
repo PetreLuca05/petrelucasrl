@@ -5,6 +5,12 @@ import type { Project } from './data.ts'
 const FONT = '"Space Grotesk", system-ui, sans-serif'
 const CANVAS_W = 1024
 const CANVAS_H = 512
+// the blurred photo behind each card's face: how much it is enlarged, how blurred (a mipmap
+// level), how much colour it gains, and how far it is washed toward white (as in index.css)
+const BACKDROP_ZOOM = 1.5
+const BACKDROP_LOD = 4.5
+const BACKDROP_SATURATION = 1.4
+const BACKDROP_WASH = 0.5
 // photo slot on the card canvas; the text column starts to its right
 const PHOTO = { x: 32, y: 32, w: 384, h: 448 }
 const TEXT_X = 456
@@ -218,12 +224,49 @@ export function createCard(
   // both sides are drawn, so the cards on the far side of the wheel show their backs, which
   // are near-black (the face's picture only shows through faintly)
   const bodyMaterial = new THREE.MeshBasicMaterial({ map: cardTexture, alphaTest: 0.5, side: THREE.DoubleSide })
+  // Like iOS fills the space around a picture, the card's white face is its photo again,
+  // enlarged, blurred and washed out, with the card's text multiplied over it. The blur comes
+  // from the photo's smaller mipmap levels, so it costs a few texture reads.
   bodyMaterial.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader.replace(
-      '#include <map_fragment>',
-      `#include <map_fragment>
-      if (!gl_FrontFacing) diffuseColor.rgb *= ${BACK_SHADE.toFixed(3)};`,
-    )
+    const u = photoMaterial.uniforms
+    Object.assign(shader.uniforms, { uA: u.uA, uB: u.uB, uAspectA: u.uAspectA, uAspectB: u.uAspectB, uMix: u.uMix })
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        /* glsl */ `#include <common>
+uniform sampler2D uA;
+uniform sampler2D uB;
+uniform float uAspectA;
+uniform float uAspectB;
+uniform float uMix;
+// object-fit: cover over the whole card, enlarged
+vec2 backdropUv(vec2 uv, float aspect) {
+  const float card = ${(CANVAS_W / CANVAS_H).toFixed(4)};
+  vec2 s = aspect > card ? vec2(card / aspect, 1.0) : vec2(1.0, aspect / card);
+  return (uv - 0.5) * s / ${BACKDROP_ZOOM.toFixed(2)} + 0.5;
+}
+vec3 blurred(sampler2D photo, vec2 uv) {
+  // five reads of a small mipmap level, spread a little, smooth out its blockiness
+  const float lod = ${BACKDROP_LOD.toFixed(1)};
+  const float d = 0.02;
+  vec3 c = textureLod(photo, uv, lod).rgb * 2.0;
+  c += textureLod(photo, uv + vec2(d, 0.0), lod).rgb + textureLod(photo, uv - vec2(d, 0.0), lod).rgb;
+  c += textureLod(photo, uv + vec2(0.0, d), lod).rgb + textureLod(photo, uv - vec2(0.0, d), lod).rgb;
+  return sRGBTransferEOTF(vec4(c / 6.0, 1.0)).rgb;
+}`,
+      )
+      .replace(
+        '#include <map_fragment>',
+        /* glsl */ `#include <map_fragment>
+      if (gl_FrontFacing) {
+        vec3 photo = mix(blurred(uA, backdropUv(vMapUv, uAspectA)), blurred(uB, backdropUv(vMapUv, uAspectB)), uMix);
+        // a touch more colour, as a blur greys things out, then washed out toward white
+        photo = mix(vec3(dot(photo, vec3(0.2126, 0.7152, 0.0722))), photo, ${BACKDROP_SATURATION.toFixed(2)});
+        diffuseColor.rgb *= mix(photo, vec3(1.0), ${BACKDROP_WASH.toFixed(2)});
+      } else {
+        diffuseColor.rgb *= ${BACK_SHADE.toFixed(3)};
+      }`,
+      )
   }
   const body = new THREE.Mesh(shapes.ring.body, bodyMaterial)
   body.updateMorphTargets()

@@ -234,6 +234,13 @@ button {
   /* above the live text it covers, below the photo */
   z-index: 2;
   opacity: calc(1 - 5 * var(--detail-progress, 0));
+  /* white drawn over the blurred photo: multiplied, so the photo shows through as on the 3D card */
+  mix-blend-mode: multiply;
+}
+
+/* while the picture stands in for it, the live text is hidden; they cross-fade as the card collapses */
+.detail-card:has(.detail-card-image) .detail-text {
+  opacity: calc(5 * var(--detail-progress, 0));
 }
 
 /* The photo's shape, which eases from one to the next as the slideshow moves on. Registered
@@ -297,9 +304,9 @@ button {
   overflow: hidden;
 }
 
-/* Behind the collapsed header, like iOS fills the space around a picture: the same photo,
-   enlarged and blurred, under a light wash so the dark text stays readable. It comes in as
-   the card collapses and follows the slideshow. The blur reaches past the card's edges, so
+/* Behind the card, like iOS fills the space around a picture: the same photo, enlarged and
+   blurred, under a light wash so the dark text stays readable, as on the 3D cards. It
+   follows the slideshow. The blur reaches past the card's edges, so
    the enlargement keeps its soft rim outside, clipped by the card. */
 .detail-backdrop {
   position: absolute;
@@ -307,7 +314,6 @@ button {
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
-  opacity: var(--detail-progress, 0);
 }
 
 .detail-backdrop img {
