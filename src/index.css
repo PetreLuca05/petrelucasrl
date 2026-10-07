@@ -122,7 +122,7 @@ button {
 .grid .projects-ui {
   opacity: 1;
   visibility: visible;
-  transition: opacity 0.5s 0.9s;
+  transition: opacity 0.3s 0.15s;
 }
 
 .landing-ui,

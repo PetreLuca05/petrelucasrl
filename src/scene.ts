@@ -42,8 +42,8 @@ const MIN_HORIZONTAL_FOV = 58
 const FOCUS_SCALE = 0.12
 // how far (radians) the aimed-at card tips back when the crosshair is at its very edge
 const PRESS_TILT = 0.3
-const CARD_STAGGER = 0.12
-const CARD_ENTER = 0.7
+const CARD_STAGGER = 0.025
+const CARD_ENTER = 0.3
 // where an open card sits on screen, in CSS pixels
 const DETAIL_TOP = 72
 const DETAIL_MAX_WIDTH = 560
@@ -434,14 +434,14 @@ export function createScene(
     showGrid = view === 'grid'
     const showCards = showProjects || showWheel || showGrid
     const insideBefore = inside
-    inside = clamp(inside + (showCards ? dt : -dt) / 0.8, 0, 1)
+    inside = clamp(inside + (showCards ? dt : -dt) / 0.3, 0, 1)
     if (inside !== insideBefore) resize()
     const k = easeInOutCubic(inside)
     // the cards only grow in the arrangement the view asks for; switching between the ring
     // and the wheel shrinks them out first, then they come back in their new places
     const wantMode = view === 'wheel' ? 'wheel' : view === 'grid' ? 'grid' : 'ring'
     const growing = showCards && cardsMode === wantMode
-    cardsTime = clamp(cardsTime + (growing ? dt : -dt * 2.5), 0, cardsDuration)
+    cardsTime = clamp(cardsTime + (growing ? dt : -dt * 4), 0, cardsDuration)
     if (cardsTime === 0 && cardsMode !== wantMode) {
       cardsMode = wantMode
       for (const card of cards) card.setShape(cardsMode === 'grid' ? 'flat' : cardsMode)
