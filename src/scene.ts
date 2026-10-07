@@ -54,6 +54,10 @@ const DETAIL_RISE = 58
 const DETAIL_SWAY = 0.35
 // the page's own copy of an open card can shrink to this share of its height (see index.css)
 const DETAIL_MIN_SCALE = 0.5
+// How far through its flight an opening card is when the page's copy takes over and flies it
+// the rest of the way (and, closing, where the 3D card takes it back). The 3D card is
+// straightened out by then, since the page's copy can turn and scale but not bend.
+const HANDOVER = 0.6
 
 const easeInOutCubic = (x: number) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2)
 // eases out with a little overshoot, like something arriving on a spring
@@ -71,6 +75,11 @@ export function createScene(
   onExit: () => void,
   onCloseRequest: () => void,
   onSway: (transform: string) => void,
+  /**
+   * The page's copy of the open card: null while the 3D card is shown, otherwise the CSS
+   * transform that puts it where the 3D card would be ('none' once it is in place).
+   */
+  onCard: (transform: string | null) => void,
 ) {
   // The dome paints every pixel, backdrop included, so the canvas is opaque: nothing is
   // blended with the page behind it, and the browser has no second layer to composite.
@@ -218,6 +227,32 @@ export function createScene(
   let detailCardPixels = 1
   // seconds the open card has been in place; the page's copy takes over shortly after
   let detailArrived = 0
+  // the open card's pose relative to its resting place, for the page's copy
+  const cardPose = new THREE.Matrix4()
+  const cardOffset = new THREE.Vector3()
+  const cardTurn = new THREE.Quaternion()
+  const cardSize = new THREE.Vector3()
+  const cssMatrix = new THREE.Matrix4()
+  let cardState: string | null = null
+  const setCard = (state: string | null) => {
+    if (state === cardState) return
+    cardState = state
+    onCard(state)
+  }
+  // CSS for the page's copy: the card's offset, turn and size from its resting place, seen
+  // through the camera's perspective (the eye is at the screen's centre, not the card's)
+  const cardTransform = () => {
+    const pixels = window.innerHeight / detailVisibleHeight
+    const eye = window.innerHeight / 2 / Math.tan(degToRad(visibleFov / 2))
+    // three's y axis points up, CSS's points down
+    cardTurn.set(-cardTurn.x, cardTurn.y, -cardTurn.z, cardTurn.w)
+    cardOffset.set(cardOffset.x * pixels, -cardOffset.y * pixels, cardOffset.z * pixels)
+    cssMatrix.compose(cardOffset, cardTurn, cardSize)
+    // from the card's centre to the screen's centre, where the eye looks from
+    const toCentre = detailPosition.y * pixels
+    const m = cssMatrix.elements.map((value) => value.toFixed(6)).join(',')
+    return `translateY(${toCentre.toFixed(2)}px) perspective(${eye.toFixed(1)}px) translateY(${(-toCentre).toFixed(2)}px) matrix3d(${m})`
+  }
   let visibleFov = FOV
   const swayEuler = new THREE.Euler()
   const swayQuaternion = new THREE.Quaternion()
@@ -575,7 +610,7 @@ export function createScene(
         // on the wheel the cards not at the front stand back a little in the shade
         card.setDim(onTheWheel ? 1 - chosen : 0)
         // the card straightens out as it comes forward to be read
-        card.setFlat(i === detailCard ? clamp(open, 0, 1) : 0)
+        card.setFlat(i === detailCard ? clamp(open / HANDOVER, 0, 1) : 0)
         if (i === detailCard && open > 0) {
           // fly from its place to the spot in front of the camera, and stay glued to the camera there
           scratch.copy(detailPosition).applyQuaternion(swayQuaternion)
@@ -584,8 +619,23 @@ export function createScene(
           scratchQuaternion.copy(camera.quaternion).multiply(swayQuaternion)
           group.quaternion.slerpQuaternions(homeQuaternion, scratchQuaternion, open)
           group.scale.setScalar(scale + (1 - scale) * open)
-          group.visible = detailArrived < 0.3
+          // past the hand-over the page's copy flies the card; it is told exactly where this
+          // one would be, relative to its own resting place in front of the camera
+          const paged = open >= HANDOVER
+          group.visible = !paged
+          if (paged) {
+            group.updateMatrixWorld()
+            camera.updateMatrixWorld()
+            cardPose.multiplyMatrices(camera.matrixWorldInverse, group.matrixWorld)
+            // the page already carries the sway (see onSway), so take it out
+            cardPose.premultiply(swayShift.makeRotationFromQuaternion(swayQuaternion.clone().invert()))
+            cardPose.decompose(cardOffset, cardTurn, cardSize)
+            cardOffset.sub(detailPosition)
+            const settled = cardOffset.lengthSq() < 1e-10 && Math.abs(cardTurn.w) > 1 - 1e-9 && Math.abs(cardSize.x - 1) < 1e-5
+            setCard(settled ? 'none' : cardTransform())
+          } else setCard(null)
         } else {
+          if (i === detailCard) setCard(null)
           // in the ring the card gives way under the crosshair: whichever part is aimed at tips back
           const pressed = i === next && detailBlend === 0 && (showProjects || showGrid)
           const pressX = press[i].x.update(pressed ? pressAt.x : 0, dt, 12, 0.6)

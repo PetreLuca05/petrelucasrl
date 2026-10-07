@@ -46,6 +46,7 @@ export default function App() {
   const screenRef = useRef<HTMLDivElement>(null)
   const projectsRef = useRef<HTMLDivElement>(null)
   const floatRef = useRef<HTMLDivElement>(null)
+  const headRef = useRef<HTMLDivElement>(null)
   const [photo, setPhoto] = useState(0)
   // a picture of the 3D card, laid over the page's copy so the hand-over between them is exact
   const [cardImage, setCardImage] = useState('')
@@ -105,6 +106,13 @@ export default function App() {
       // every frame while a card is open; written straight to the element, not through React
       (transform) => {
         if (floatRef.current) floatRef.current.style.transform = transform
+      },
+      (transform) => {
+        // written straight to the page in the same frame the 3D card hides or shows
+        const head = headRef.current
+        if (!head) return
+        head.style.visibility = transform === null ? 'hidden' : 'visible'
+        head.style.transform = transform ?? 'none'
       },
     )
     sceneRef.current = scene
@@ -235,7 +243,7 @@ export default function App() {
         </div>
         {/* the open card and its text lean and shake with the camera (see onSway) */}
         <div ref={floatRef} className="detail-float">
-        <div className="detail-head">
+        <div ref={headRef} className="detail-head">
           <div className="detail-card">
             {cardImage && <img className="detail-card-image" src={cardImage} alt="" />}
             {/* the photo again, enlarged and blurred behind the collapsed header */}
