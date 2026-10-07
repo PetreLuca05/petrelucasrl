@@ -114,6 +114,11 @@ export default function App() {
         head.style.visibility = transform === null ? 'hidden' : 'visible'
         head.style.transform = transform ?? 'none'
       },
+      (index) => {
+        // the page's copy of the card follows the focus, so it is ready before a tap opens it
+        setShown(index)
+        setCardImage(sceneRef.current?.cardImage(index) ?? '')
+      },
     )
     sceneRef.current = scene
     return () => scene.dispose()
@@ -191,12 +196,16 @@ export default function App() {
     )
   }, [shown])
 
-  // The open card's photos keep cross-fading, picking up exactly where the 3D card's slideshow
-  // is so the same photo is showing on both when one takes over from the other.
+  // tell the scene once the page's copy shows this card, so it can stand in for the 3D one
   useEffect(() => {
-    if (detail === null) return
+    sceneRef.current?.setPageCard(shown)
+  }, [shown, cardImage])
+
+  // The page's copy of the card keeps its photos cross-fading, picking up exactly where the 3D
+  // card's slideshow is so the same photo is showing on both when one takes over from the other.
+  useEffect(() => {
     const cycle = HOLD_SECONDS + FADE_SECONDS
-    const time = Math.max(sceneRef.current?.photoTime(detail) ?? 0, 0)
+    const time = Math.max(sceneRef.current?.photoTime(shown) ?? 0, 0)
     const step = Math.floor(time / cycle)
     const into = time - step * cycle
     const fading = into >= HOLD_SECONDS
@@ -213,7 +222,7 @@ export default function App() {
       clearTimeout(first)
       clearInterval(interval)
     }
-  }, [detail])
+  }, [shown])
 
   return (
     <div

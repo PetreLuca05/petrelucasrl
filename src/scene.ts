@@ -54,8 +54,9 @@ const DETAIL_RISE = 58
 const DETAIL_SWAY = 0.35
 // the page's own copy of an open card can shrink to this share of its height (see index.css)
 const DETAIL_MIN_SCALE = 0.5
-// How far through its flight an opening card is when the page's copy takes over and flies it
-// the rest of the way (and, closing, where the 3D card takes it back). The 3D card is
+// How far through its pop forward a focused card is when the page's copy takes its place
+// (and, losing focus, where the 3D card takes it back). It is already the page's copy when
+// it is opened, so opening and closing never swap one for the other. The 3D card is
 // straightened out by then, since the page's copy can turn and scale but not bend.
 const HANDOVER = 0.6
 
@@ -80,6 +81,8 @@ export function createScene(
    * transform that puts it where the 3D card would be ('none' once it is in place).
    */
   onCard: (transform: string | null) => void,
+  /** A card has been focused; the page should get its copy of that card ready (setPageCard). */
+  onFocus: (index: number) => void,
 ) {
   // The dome paints every pixel, backdrop included, so the canvas is opaque: nothing is
   // blended with the page behind it, and the browser has no second layer to composite.
@@ -234,6 +237,10 @@ export function createScene(
   const cardSize = new THREE.Vector3()
   const cssMatrix = new THREE.Matrix4()
   let cardState: string | null = null
+  // the card whose contents the page's copy is showing (see setPageCard); only that one can
+  // be handed over, so the page never shows one card's text in another's place
+  let pageCard = -1
+  let pagedThisFrame = false
   const setCard = (state: string | null) => {
     if (state === cardState) return
     cardState = state
@@ -608,9 +615,10 @@ export function createScene(
         const homePosition = onTheWheel ? wheelPosition : onTheGrid ? gridPosition : homes[i].position
         const homeQuaternion = onTheWheel ? wheelQuaternion : onTheGrid ? gridQuaternion : homes[i].quaternion
         // on the wheel the cards not at the front stand back a little in the shade
-        card.setDim(onTheWheel ? 1 - chosen : 0)
-        // the card straightens out as it comes forward to be read
-        card.setFlat(i === detailCard ? clamp(open / HANDOVER, 0, 1) : 0)
+        card.setDim(onTheWheel ? 1 - clamp(chosen / HANDOVER, 0, 1) : 0)
+        // the card straightens out as it is focused, ready to be read
+        const flat = clamp(Math.max(chosen, i === detailCard ? open : 0) / HANDOVER, 0, 1)
+        card.setFlat(flat)
         if (i === detailCard && open > 0) {
           // fly from its place to the spot in front of the camera, and stay glued to the camera there
           scratch.copy(detailPosition).applyQuaternion(swayQuaternion)
@@ -619,39 +627,41 @@ export function createScene(
           scratchQuaternion.copy(camera.quaternion).multiply(swayQuaternion)
           group.quaternion.slerpQuaternions(homeQuaternion, scratchQuaternion, open)
           group.scale.setScalar(scale + (1 - scale) * open)
-          // past the hand-over the page's copy flies the card; it is told exactly where this
-          // one would be, relative to its own resting place in front of the camera
-          const paged = open >= HANDOVER
-          group.visible = !paged
-          if (paged) {
-            group.updateMatrixWorld()
-            camera.updateMatrixWorld()
-            cardPose.multiplyMatrices(camera.matrixWorldInverse, group.matrixWorld)
-            // the page already carries the sway (see onSway), so take it out
-            cardPose.premultiply(swayShift.makeRotationFromQuaternion(swayQuaternion.clone().invert()))
-            cardPose.decompose(cardOffset, cardTurn, cardSize)
-            cardOffset.sub(detailPosition)
-            const settled = cardOffset.lengthSq() < 1e-10 && Math.abs(cardTurn.w) > 1 - 1e-9 && Math.abs(cardSize.x - 1) < 1e-5
-            setCard(settled ? 'none' : cardTransform())
-          } else setCard(null)
         } else {
-          if (i === detailCard) setCard(null)
           // in the ring the card gives way under the crosshair: whichever part is aimed at tips back
           const pressed = i === next && detailBlend === 0 && (showProjects || showGrid)
           const pressX = press[i].x.update(pressed ? pressAt.x : 0, dt, 12, 0.6)
           const pressY = press[i].y.update(pressed ? pressAt.y : 0, dt, 12, 0.6)
           pressTilt.setFromEuler(pressEuler.set(-pressY * PRESS_TILT, pressX * PRESS_TILT, 0))
-          group.visible = true
           group.position.copy(homePosition)
           group.quaternion.copy(homeQuaternion).multiply(pressTilt)
           // the other cards step aside while one is open
           group.scale.setScalar(Math.max(scale * (1 - open), 0.001))
         }
+        // Once straightened, the page's copy stands in for the card: it is told exactly where
+        // this one would be, relative to its resting place in front of the camera.
+        const paged = i === pageCard && flat >= 1 && (i === next || i === detailCard)
+        group.visible = !paged
+        if (paged) {
+          pagedThisFrame = true
+          group.updateMatrixWorld()
+          camera.updateMatrixWorld()
+          cardPose.multiplyMatrices(camera.matrixWorldInverse, group.matrixWorld)
+          // while a card is open the page already carries the sway (see onSway), so take it out
+          if (swaying) cardPose.premultiply(swayShift.makeRotationFromQuaternion(scratchQuaternion.copy(swayQuaternion).invert()))
+          cardPose.decompose(cardOffset, cardTurn, cardSize)
+          cardOffset.sub(detailPosition)
+          const settled = cardOffset.lengthSq() < 1e-10 && Math.abs(cardTurn.w) > 1 - 1e-9 && Math.abs(cardSize.x - 1) < 1e-5
+          setCard(settled ? 'none' : cardTransform())
+        }
         // offset each card so they don't all fade in step
         card.update(t - i * 0.7)
       })
     }
+    if (!pagedThisFrame || !cardRing.visible) setCard(null)
+    pagedThisFrame = false
     tapped = false
+    if (next !== focused && next !== null) onFocus(next)
     focused = next
     if (focused !== null) uniforms.uFocusU.value = sectionU(focused)
     // the dome lights up the chosen card's section, in the ring only
@@ -683,6 +693,10 @@ export function createScene(
     /** The page's boxes for the open write-up's 3D models, and the text column that clips them. */
     setInserts(items: { element: HTMLElement; insert: Insert }[], list: HTMLElement) {
       inserts.set(items, list)
+    },
+    /** The page's copy now shows card `index`, so that card may be handed over to it. */
+    setPageCard(index: number) {
+      pageCard = index
     },
     setView(next: View) {
       view = next
