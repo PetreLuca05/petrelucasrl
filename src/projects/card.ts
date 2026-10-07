@@ -12,7 +12,7 @@ const BACKDROP_LOD = 4.5
 const BACKDROP_SATURATION = 1.4
 const BACKDROP_WASH = 0.5
 // how far in from its edges the photo fades into the backdrop, as a share of its height
-const PHOTO_EDGE = 0.09
+const PHOTO_EDGE = 0.3
 // photo slot on the card canvas; the text column starts to its right
 const PHOTO = { x: 32, y: 32, w: 384, h: 448 }
 const TEXT_X = 456
@@ -33,19 +33,19 @@ const random = (a: number, b: number) => {
   h = Math.imul(h ^ (h >>> 13), 1274126177)
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296
 }
-// how many steps back the random walk is replayed from; any start gives the same pattern
-const WALK = 8
 /** Which photo card `card`'s slideshow shows at `t`: fading from `a` to `b` by `mix`. */
 export function slideAt(card: number, count: number, t: number) {
   if (count < 2) return { a: 0, b: 0, mix: 0 }
   const cycle = HOLD_SECONDS + FADE_SECONDS
   const time = Math.max(t, 0)
   const step = Math.floor(time / cycle)
-  // each step moves on by 1 to count - 1 photos, so the same one never shows twice in a row
-  let a = Math.floor(random(card, step - WALK) * count)
-  for (let s = step - WALK + 1; s <= step; s++) a = (a + 1 + Math.floor(random(card, s) * (count - 1))) % count
-  const b = (a + 1 + Math.floor(random(card, step + 1) * (count - 1))) % count
-  return { a, b, mix: THREE.MathUtils.smoothstep(time - step * cycle, HOLD_SECONDS, cycle) }
+  // A pick depends only on its own step, so the photo a fade ends on is exactly the one the
+  // next step starts from. One that would repeat the step before's raw pick moves on by one.
+  const pick = (s: number) => {
+    const raw = Math.floor(random(card, s) * count)
+    return raw === Math.floor(random(card, s - 1) * count) ? (raw + 1) % count : raw
+  }
+  return { a: pick(step), b: pick(step + 1), mix: THREE.MathUtils.smoothstep(time - step * cycle, HOLD_SECONDS, cycle) }
 }
 
 // run `work` when the browser has a quiet moment
@@ -160,11 +160,14 @@ function drawCard(canvas: HTMLCanvasElement, project: Project, index: number) {
   ctx.fillStyle = '#fff'
   ctx.fill()
 
+  // the number in the bottom right corner (.detail-number in index.css matches it)
   ctx.textBaseline = 'alphabetic'
   ctx.fillStyle = 'rgba(17, 17, 17, 0.45)'
   ctx.font = `700 28px ${FONT}`
   ctx.letterSpacing = '8px'
-  ctx.fillText(String(index + 1).padStart(2, '0'), TEXT_X, 84)
+  ctx.textAlign = 'right'
+  ctx.fillText(String(index + 1).padStart(2, '0'), CANVAS_W - 32, CANVAS_H - 40)
+  ctx.textAlign = 'left'
   ctx.letterSpacing = '0px'
 
   // name: shrink to fit one line, wrap to two if it would get too small
@@ -175,7 +178,8 @@ function drawCard(canvas: HTMLCanvasElement, project: Project, index: number) {
     size -= 4
     ctx.font = `700 ${size}px ${FONT}`
   }
-  let y = 100
+  // the name starts at the top now the number has moved to the corner
+  let y = 34
   for (const line of wrapText(ctx, project.name, TEXT_W).slice(0, 2)) {
     y += size * 1.08
     ctx.fillText(line, TEXT_X, y)

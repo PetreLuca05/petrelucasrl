@@ -270,7 +270,7 @@ button {
 /* The photo's edges melt into the blurred copy behind it, over the same share of its height
    as on the 3D card (PHOTO_EDGE in projects/card.ts). */
 .detail-photo {
-  --edge: calc(var(--photo-height) * 0.09);
+  --edge: calc(var(--photo-height) * 0.3);
   -webkit-mask-image:
     linear-gradient(to right, transparent, #000 var(--edge), #000 calc(100% - var(--edge)), transparent),
     linear-gradient(to bottom, transparent, #000 var(--edge), #000 calc(100% - var(--edge)), transparent);
@@ -338,16 +338,23 @@ button {
   background: rgba(255, 255, 255, 0.5);
 }
 
-/* the project number folds away as the card collapses */
-.detail-text span {
-  display: block;
-  overflow: hidden;
-  max-height: calc(1.5em * (1 - var(--detail-progress, 0)));
-  margin-top: calc(0.85em * (1 - var(--detail-progress, 0)));
-  opacity: calc(1 - var(--detail-progress, 0));
+/* The project number, in the card's bottom right corner where the 3D card draws it. It fades
+   away as the card collapses. */
+.detail-number {
+  position: absolute;
+  right: calc(32 * var(--u));
+  bottom: calc(34 * var(--u));
+  z-index: 1;
   font-size: 0.28em;
+  line-height: 1;
   letter-spacing: 0.28em;
   color: rgba(17, 17, 17, 0.45);
+  opacity: calc(1 - var(--detail-progress, 0));
+}
+
+/* hidden while the picture of the card stands in for it, like the text */
+.detail-card:has(.detail-card-image) .detail-number {
+  opacity: min(calc(5 * var(--detail-progress, 0)), calc(1 - var(--detail-progress, 0)));
 }
 
 .detail-text h2 {

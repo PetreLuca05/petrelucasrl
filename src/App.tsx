@@ -243,8 +243,8 @@ export default function App() {
                 />
               ))}
             </div>
+            <span className="detail-number">{String(shown + 1).padStart(2, '0')}</span>
             <div className="detail-text">
-              <span>{String(shown + 1).padStart(2, '0')}</span>
               <h2>{projects[shown].name}</h2>
               <p>{projects[shown].description}</p>
             </div>
