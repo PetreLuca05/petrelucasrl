@@ -95,19 +95,34 @@ button {
   padding: 0 16px;
 }
 
-/* Both sets of controls stay mounted; switching views swaps them at once. */
+/* Both sets of controls stay mounted and cross-fade with the view. */
+
 .landing-ui,
 .projects-ui {
   opacity: 0;
   visibility: hidden;
+  transition:
+    opacity 0.4s,
+    visibility 0s 0.4s,
+    color 0.6s 0.5s;
 }
 
-.landing .landing-ui,
+.landing .landing-ui {
+  opacity: 1;
+  visibility: visible;
+  /* the colour flips while the view is at its whitest */
+  transition:
+    opacity 0.4s 0.3s,
+    color 0.6s 0.5s;
+}
+
+/* the projects controls wait for the sphere to close around the view */
 .projects .projects-ui,
 .wheel .projects-ui,
 .grid .projects-ui {
   opacity: 1;
   visibility: visible;
+  transition: opacity 0.3s 0.15s;
 }
 
 .landing-ui,

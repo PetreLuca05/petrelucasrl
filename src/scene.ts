@@ -434,16 +434,18 @@ export function createScene(
     showGrid = view === 'grid'
     const showCards = showProjects || showWheel || showGrid
     const insideBefore = inside
-    inside = showCards ? 1 : 0
+    inside = clamp(inside + (showCards ? dt : -dt) / 0.3, 0, 1)
     if (inside !== insideBefore) resize()
     const k = easeInOutCubic(inside)
-    // switching views is instant: the cards are simply in their new arrangement, at full size
+    // the cards only grow in the arrangement the view asks for; switching between the ring
+    // and the wheel shrinks them out first, then they come back in their new places
     const wantMode = view === 'wheel' ? 'wheel' : view === 'grid' ? 'grid' : 'ring'
-    if (cardsMode !== wantMode) {
+    const growing = showCards && cardsMode === wantMode
+    cardsTime = clamp(cardsTime + (growing ? dt : -dt * 4), 0, cardsDuration)
+    if (cardsTime === 0 && cardsMode !== wantMode) {
       cardsMode = wantMode
       for (const card of cards) card.setShape(cardsMode === 'grid' ? 'flat' : cardsMode)
     }
-    cardsTime = showCards ? cardsDuration : 0
     const onTheWheel = cardsMode === 'wheel'
     const onTheGrid = cardsMode === 'grid'
     wheel.update(dt)
@@ -457,7 +459,7 @@ export function createScene(
     const titleOpacity = 1
     title.uniforms.uOpacity.value = titleOpacity
     uniforms.uTime.value = t
-    ringAmount = showProjects ? 1 : 0
+    ringAmount = damp(ringAmount, showProjects ? 1 : 0, 6, dt)
     uniforms.uSectionAmount.value = k * ringAmount
     // pulse rings come from the viewer's side on the landing and from the top among the projects
     uniforms.uFacing.value.set(0, k, 1 - k).normalize()
