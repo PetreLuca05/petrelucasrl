@@ -157,8 +157,7 @@ button {
 
 /* Opened project: the card flies to the top (see scene.ts) and its write-up scrolls below it. */
 
-/* The page's copy of the open card. It takes over from the 3D card during the last part of the
-   card's flight, moved by the scene to wherever the 3D card would be, and lands in its place.
+/* The page's copy of the open card. It appears exactly over the 3D card once that has landed.
    From then on, as the text scrolls, .detail-head rises by --detail-rise and then .detail-card
    loses --detail-lost of its height. The card's contents are sized in em, so they shrink with
    the card's font-size. Sizes derive from the card's width so it matches the 3D card, which
@@ -182,8 +181,18 @@ button {
   top: calc(var(--bleed, 140px) + 72px - var(--detail-rise, 0px));
   width: var(--detail-width, 300px);
   pointer-events: none;
-  /* shown, and moved during the last part of the card's flight, by the scene (onCard) */
+  opacity: 0;
   visibility: hidden;
+  transition:
+    opacity 0.2s,
+    visibility 0s 0.2s;
+}
+
+/* 0.7s is about how long the 3D card's flight takes to settle (the `flight` spring in scene.ts) */
+.detail .detail-head {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.15s 0.7s;
 }
 
 .detail-card {

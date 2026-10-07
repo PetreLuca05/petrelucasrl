@@ -46,7 +46,6 @@ export default function App() {
   const screenRef = useRef<HTMLDivElement>(null)
   const projectsRef = useRef<HTMLDivElement>(null)
   const floatRef = useRef<HTMLDivElement>(null)
-  const headRef = useRef<HTMLDivElement>(null)
   const [photo, setPhoto] = useState(0)
   // a picture of the 3D card, laid over the page's copy so the hand-over between them is exact
   const [cardImage, setCardImage] = useState('')
@@ -106,18 +105,6 @@ export default function App() {
       // every frame while a card is open; written straight to the element, not through React
       (transform) => {
         if (floatRef.current) floatRef.current.style.transform = transform
-      },
-      (transform) => {
-        // written straight to the page in the same frame the 3D card hides or shows
-        const head = headRef.current
-        if (!head) return
-        head.style.visibility = transform === null ? 'hidden' : 'visible'
-        head.style.transform = transform ?? 'none'
-      },
-      (index) => {
-        // the page's copy of the card follows the focus, so it is ready before a tap opens it
-        setShown(index)
-        setCardImage(sceneRef.current?.cardImage(index) ?? '')
       },
     )
     sceneRef.current = scene
@@ -196,16 +183,12 @@ export default function App() {
     )
   }, [shown])
 
-  // tell the scene once the page's copy shows this card, so it can stand in for the 3D one
+  // The open card's photos keep cross-fading, picking up exactly where the 3D card's slideshow
+  // is so the same photo is showing on both when one takes over from the other.
   useEffect(() => {
-    sceneRef.current?.setPageCard(shown)
-  }, [shown, cardImage])
-
-  // The page's copy of the card keeps its photos cross-fading, picking up exactly where the 3D
-  // card's slideshow is so the same photo is showing on both when one takes over from the other.
-  useEffect(() => {
+    if (detail === null) return
     const cycle = HOLD_SECONDS + FADE_SECONDS
-    const time = Math.max(sceneRef.current?.photoTime(shown) ?? 0, 0)
+    const time = Math.max(sceneRef.current?.photoTime(detail) ?? 0, 0)
     const step = Math.floor(time / cycle)
     const into = time - step * cycle
     const fading = into >= HOLD_SECONDS
@@ -222,7 +205,7 @@ export default function App() {
       clearTimeout(first)
       clearInterval(interval)
     }
-  }, [shown])
+  }, [detail])
 
   return (
     <div
@@ -252,7 +235,7 @@ export default function App() {
         </div>
         {/* the open card and its text lean and shake with the camera (see onSway) */}
         <div ref={floatRef} className="detail-float">
-        <div ref={headRef} className="detail-head">
+        <div className="detail-head">
           <div className="detail-card">
             {cardImage && <img className="detail-card-image" src={cardImage} alt="" />}
             {/* the photo again, enlarged and blurred behind the collapsed header */}
