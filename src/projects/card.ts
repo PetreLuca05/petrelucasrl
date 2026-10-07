@@ -8,7 +8,7 @@ const CANVAS_H = 512
 // the blurred photo behind each card's face: how much it is enlarged, how blurred (a mipmap
 // level), how much colour it gains, and how far it is washed toward white (as in index.css)
 const BACKDROP_ZOOM = 1.5
-const BACKDROP_LOD = 4.5
+const BACKDROP_LOD = 6
 const BACKDROP_SATURATION = 1.4
 const BACKDROP_WASH = 0.5
 // how far in from its edges the photo fades into the backdrop, as a share of its height
@@ -269,7 +269,7 @@ vec2 backdropUv(vec2 uv, float aspect) {
 vec3 blurred(sampler2D photo, vec2 uv) {
   // five reads of a small mipmap level, spread a little, smooth out its blockiness
   const float lod = ${BACKDROP_LOD.toFixed(1)};
-  const float d = 0.02;
+  const float d = 0.035;
   vec3 c = textureLod(photo, uv, lod).rgb * 2.0;
   c += textureLod(photo, uv + vec2(d, 0.0), lod).rgb + textureLod(photo, uv - vec2(d, 0.0), lod).rgb;
   c += textureLod(photo, uv + vec2(0.0, d), lod).rgb + textureLod(photo, uv - vec2(0.0, d), lod).rgb;

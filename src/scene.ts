@@ -561,8 +561,6 @@ export function createScene(
         else placeOnWheel(i)
         const homePosition = onTheGrid ? gridPosition : wheelPosition
         const homeQuaternion = onTheGrid ? gridQuaternion : wheelQuaternion
-        // on the wheel the cards not at the front stand back a little in the shade
-        card.setDim(onTheWheel ? 1 - chosen : 0)
         // the card straightens out as it comes forward to be read
         card.setFlat(i === detailCard ? clamp(open, 0, 1) : 0)
         if (i === detailCard && open > 0) {
