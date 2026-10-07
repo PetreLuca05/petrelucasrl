@@ -591,7 +591,8 @@ export function createScene(
           const pressX = press[i].x.update(pressed ? pressAt.x : 0, dt, 12, 0.6)
           const pressY = press[i].y.update(pressed ? pressAt.y : 0, dt, 12, 0.6)
           pressTilt.setFromEuler(pressEuler.set(-pressY * PRESS_TILT, pressX * PRESS_TILT, 0))
-          group.visible = true
+          // shrunk to nothing behind an open card: not drawn at all
+          group.visible = open < 1
           group.position.copy(homePosition)
           group.quaternion.copy(homeQuaternion).multiply(pressTilt)
           // the other cards step aside while one is open

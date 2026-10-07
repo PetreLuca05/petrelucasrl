@@ -49,7 +49,10 @@ const BLEND = 0.5
 const PLAYER_RADIUS = 2.43
 // the light every model is lit by: Unity's white sun at intensity 1, casting shadows
 const LIGHT_POSITION = new THREE.Vector3(2, 4, 3)
-const SHADOW_MAP = 1024
+const SHADOW_MAP = 512
+// Phones skip the self-shadows: they cost a whole extra pass per model per frame, and the
+// toon shading's hard step carries the form well enough without them.
+const SHADOWS = !window.matchMedia('(pointer: coarse)').matches
 
 type Loaded = { scene: THREE.Group; clips: THREE.AnimationClip[] }
 
@@ -81,9 +84,10 @@ export function createInserts(renderer: THREE.WebGLRenderer) {
   let slots: Slot[] = []
   let list: HTMLElement | null = null
   const size = new THREE.Vector2()
-  // each model is drawn here first, then onto the page through the fade; half floats so the
-  // dark shades do not band, and multisampled like the canvas
-  const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 })
+  // A model crossing the top or bottom edge of the text is drawn here first, then onto the
+  // page through the fade. 8-bit sRGB keeps it light on memory without banding the shades,
+  // and it is multisampled like the canvas.
+  const target = new THREE.WebGLRenderTarget(1, 1, { samples: 4, colorSpace: THREE.SRGBColorSpace })
   const composite = new THREE.Mesh(
     new THREE.PlaneGeometry(2, 2),
     new THREE.ShaderMaterial({
@@ -140,7 +144,7 @@ export function createInserts(renderer: THREE.WebGLRenderer) {
         const scene = new THREE.Scene()
         const light = new THREE.DirectionalLight(0xffffff, 1)
         light.position.copy(LIGHT_POSITION)
-        light.castShadow = true
+        light.castShadow = SHADOWS
         light.shadow.mapSize.set(SHADOW_MAP, SHADOW_MAP)
         // the model fits a unit sphere, a little more while it pops in
         const shadow = light.shadow.camera
@@ -204,6 +208,7 @@ export function createInserts(renderer: THREE.WebGLRenderer) {
       let drawn = false
       for (const slot of slots) {
         const rect = slot.element.getBoundingClientRect()
+        // out of view (or wholly inside the fully faded rim): no animation, no shadow, no drawing
         if (rect.bottom <= clip.top || rect.top >= clip.bottom || rect.width < 1 || rect.height < 1) continue
         const scale = amount * (slot.insert.size ?? 1)
         if (scale < 0.01) continue
@@ -229,22 +234,30 @@ export function createInserts(renderer: THREE.WebGLRenderer) {
         slot.camera.aspect = rect.width / rect.height
         slot.camera.updateProjectionMatrix()
 
-        // the model alone, on a clear background, at the box's size in device pixels
-        target.setSize(Math.round(rect.width * ratio), Math.round(rect.height * ratio))
-        renderer.setRenderTarget(target)
-        renderer.setClearColor(0x000000, 0)
-        renderer.clear()
-        renderer.render(slot.scene, slot.camera)
-        renderer.setRenderTarget(null)
-        renderer.setClearColor(clearColor, clearAlpha)
-
-        // then onto the page in the box, kept inside the text and faded at its edges
         const top = Math.max(rect.top, clip.top)
         const bottom = Math.min(rect.bottom, clip.bottom)
         renderer.setViewport(rect.left, size.y - (rect.bottom + BLEED), rect.width, rect.height)
         renderer.setScissor(rect.left, size.y - (bottom + BLEED), rect.width, bottom - top)
-        renderer.setScissorTest(true)
-        renderer.render(compositeScene, compositeCamera)
+        if (rect.top >= clip.top + FADE_TOP && rect.bottom <= clip.bottom - FADE_BOTTOM) {
+          // clear of the fades, which is nearly always: straight onto the page, one pass
+          renderer.setScissorTest(true)
+          renderer.clearDepth()
+          renderer.render(slot.scene, slot.camera)
+        } else {
+          // crossing a fade: the model alone, on a clear background, at the box's size in
+          // device pixels, then onto the page faded like the text
+          target.setSize(Math.round(rect.width * ratio), Math.round(rect.height * ratio))
+          renderer.setRenderTarget(target)
+          renderer.setClearColor(0x000000, 0)
+          renderer.clear()
+          renderer.render(slot.scene, slot.camera)
+          renderer.setRenderTarget(null)
+          renderer.setClearColor(clearColor, clearAlpha)
+          renderer.setViewport(rect.left, size.y - (rect.bottom + BLEED), rect.width, rect.height)
+          renderer.setScissor(rect.left, size.y - (bottom + BLEED), rect.width, bottom - top)
+          renderer.setScissorTest(true)
+          renderer.render(compositeScene, compositeCamera)
+        }
         drawn = true
       }
       if (drawn) {
