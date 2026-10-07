@@ -16,6 +16,8 @@ export type Insert = {
   spin?: boolean
   /** Starting turn, in radians, for a model that looks better from an angle. */
   turn?: number
+  /** How big the model is drawn, relative to filling its box (1). */
+  size?: number
   /**
    * Which Unity toon material each of the file's materials stands for, by name. Every model is
    * toon shaded; a material left out is given two tones taken from its own colour.
@@ -44,7 +46,7 @@ const p1Photos = [
   new URL('../../assets/p1/ewewewereertewrwr.PNG', import.meta.url).href,
 ]
 const p1Inserts: Insert[] = [
-  { model: new URL('../../assets/p1/playermodell.glb', import.meta.url).href, before: 1, side: 'right', animation: 'Player|Idle', spin: true, turn: 0.6 - Math.PI + Math.PI / 2 - (25 * Math.PI) / 180, toon: { Body: 'Style3', Eyes: 'Eyes 1' } },
+  { model: new URL('../../assets/p1/playermodell.glb', import.meta.url).href, before: 1, side: 'right', animation: 'Player|Idle', spin: true, turn: 0.6 - Math.PI + Math.PI / 2 - (25 * Math.PI) / 180, size: 1.5, toon: { Body: 'Style3', Eyes: 'Eyes 1' } },
   { model: new URL('../../assets/p1/Car.glb', import.meta.url).href, before: 3, side: 'left', spin: true, turn: 0.8 },
   { model: new URL('../../assets/p1/Calculator.glb', import.meta.url).href, before: 5, side: 'right', spin: true },
   { model: new URL('../../assets/p1/Pencil.glb', import.meta.url).href, before: 7, side: 'left', spin: true, turn: 0.4 },

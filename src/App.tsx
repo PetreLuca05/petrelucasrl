@@ -238,6 +238,12 @@ export default function App() {
         <div className="detail-head">
           <div className="detail-card">
             {cardImage && <img className="detail-card-image" src={cardImage} alt="" />}
+            {/* the photo again, enlarged and blurred behind the collapsed header */}
+            <div className="detail-backdrop">
+              {projects[shown].photos.map((src, i) => (
+                <img key={i} src={src} alt="" className={i === photo % projects[shown].photos.length ? 'on' : ''} />
+              ))}
+            </div>
             <div
               className="detail-photo"
               style={{ '--photo-aspect': aspects[projects[shown].photos[photo % projects[shown].photos.length]] } as React.CSSProperties}

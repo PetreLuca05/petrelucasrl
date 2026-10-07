@@ -7,8 +7,34 @@ import { toonTexturesLoaded, unityToonMaterials } from '../toon/unity.ts'
 import type { Insert } from './data.ts'
 
 const FOV = 32
-// a model is fully faded this far from the top and bottom edges of the text (CSS px)
-const EDGE = 56
+// The text fades out over this many CSS px at its top and bottom edges (the mask on
+// .detail-list in index.css); the models fade over the same, so they melt away with the text.
+const FADE_TOP = 22
+const FADE_BOTTOM = 28
+
+// Draws a model's picture, rendered offscreen, onto the page with the text's fade. The picture
+// is premultiplied and linear; it is converted to the screen's colours here.
+const COMPOSITE_VERTEX = /* glsl */ `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = vec4(position.xy, 0.0, 1.0);
+  }
+`
+const COMPOSITE_FRAGMENT = /* glsl */ `
+  uniform sampler2D map;
+  // the text's top and bottom edges and fade lengths, in drawing-buffer pixels from the bottom
+  uniform vec4 uFade;
+  varying vec2 vUv;
+  void main() {
+    vec4 picture = texture2D(map, vUv);
+    float y = gl_FragCoord.y;
+    float fade = clamp((uFade.x - y) / uFade.z, 0.0, 1.0) * clamp((y - uFade.y) / uFade.w, 0.0, 1.0);
+    gl_FragColor = vec4(picture.rgb / max(picture.a, 1e-4), picture.a);
+    #include <colorspace_fragment>
+    gl_FragColor *= vec4(vec3(gl_FragColor.a), 1.0) * fade;
+  }
+`
 // models that sway turn back and forth this far either side of their starting turn (radians)...
 const SWAY = 0.6
 // ...once every this many seconds; a sine, so it eases to a stop at each end
@@ -55,6 +81,25 @@ export function createInserts(renderer: THREE.WebGLRenderer) {
   let slots: Slot[] = []
   let list: HTMLElement | null = null
   const size = new THREE.Vector2()
+  // each model is drawn here first, then onto the page through the fade; half floats so the
+  // dark shades do not band, and multisampled like the canvas
+  const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 })
+  const composite = new THREE.Mesh(
+    new THREE.PlaneGeometry(2, 2),
+    new THREE.ShaderMaterial({
+      vertexShader: COMPOSITE_VERTEX,
+      fragmentShader: COMPOSITE_FRAGMENT,
+      uniforms: { map: { value: target.texture }, uFade: { value: new THREE.Vector4() } },
+      transparent: true,
+      premultipliedAlpha: true,
+      depthTest: false,
+      depthWrite: false,
+    }),
+  )
+  composite.frustumCulled = false
+  const compositeScene = new THREE.Scene().add(composite)
+  const compositeCamera = new THREE.OrthographicCamera()
+  const clearColor = new THREE.Color()
   const box = new THREE.Box3()
   const sphere = new THREE.Sphere()
 
@@ -145,14 +190,22 @@ export function createInserts(renderer: THREE.WebGLRenderer) {
       if (!list || !slots.length) return
       const clip = list.getBoundingClientRect()
       renderer.getSize(size)
+      const ratio = renderer.getPixelRatio()
+      // the canvas is bled above and below the screen; WebGL measures from the bottom
+      const fromBottom = (y: number) => (size.y - (y + BLEED)) * ratio
+      ;(composite.material.uniforms.uFade.value as THREE.Vector4).set(
+        fromBottom(clip.top),
+        fromBottom(clip.bottom),
+        FADE_TOP * ratio,
+        FADE_BOTTOM * ratio,
+      )
+      renderer.getClearColor(clearColor)
+      const clearAlpha = renderer.getClearAlpha()
       let drawn = false
       for (const slot of slots) {
         const rect = slot.element.getBoundingClientRect()
         if (rect.bottom <= clip.top || rect.top >= clip.bottom || rect.width < 1 || rect.height < 1) continue
-        // fade out toward the top and bottom of the text, like the text itself does
-        const middle = rect.top + rect.height / 2
-        const edge = Math.min(middle - clip.top, clip.bottom - middle) / EDGE
-        const scale = amount * THREE.MathUtils.smoothstep(edge, 0, 1)
+        const scale = amount * (slot.insert.size ?? 1)
         if (scale < 0.01) continue
 
         slot.mixer?.update(dt)
@@ -176,14 +229,22 @@ export function createInserts(renderer: THREE.WebGLRenderer) {
         slot.camera.aspect = rect.width / rect.height
         slot.camera.updateProjectionMatrix()
 
-        // the canvas is bled above and below the screen; WebGL measures from the bottom
+        // the model alone, on a clear background, at the box's size in device pixels
+        target.setSize(Math.round(rect.width * ratio), Math.round(rect.height * ratio))
+        renderer.setRenderTarget(target)
+        renderer.setClearColor(0x000000, 0)
+        renderer.clear()
+        renderer.render(slot.scene, slot.camera)
+        renderer.setRenderTarget(null)
+        renderer.setClearColor(clearColor, clearAlpha)
+
+        // then onto the page in the box, kept inside the text and faded at its edges
         const top = Math.max(rect.top, clip.top)
         const bottom = Math.min(rect.bottom, clip.bottom)
         renderer.setViewport(rect.left, size.y - (rect.bottom + BLEED), rect.width, rect.height)
         renderer.setScissor(rect.left, size.y - (bottom + BLEED), rect.width, bottom - top)
         renderer.setScissorTest(true)
-        renderer.clearDepth()
-        renderer.render(slot.scene, slot.camera)
+        renderer.render(compositeScene, compositeCamera)
         drawn = true
       }
       if (drawn) {
@@ -192,6 +253,9 @@ export function createInserts(renderer: THREE.WebGLRenderer) {
       }
     },
     dispose() {
+      target.dispose()
+      composite.geometry.dispose()
+      composite.material.dispose()
       slots = []
       for (const loaded of cache.values()) {
         loaded
