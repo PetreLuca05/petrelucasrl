@@ -24,29 +24,28 @@ const PHOTO_MAX_SIZE = 1024
 export const HOLD_SECONDS = 3
 export const FADE_SECONDS = 1.2
 
-// The blurred backdrop behind each card's face wanders through the card's photos on its own,
-// picking one at random every BACKDROP_CYCLE seconds and fading over FADE_SECONDS. The picks
-// are a fixed sequence worked out from the card and the time, so the page's copy of an open
-// card can show exactly the same one.
-const BACKDROP_CYCLE = 5
+// Each card's slideshow goes through its photos in a random order: one is held for
+// HOLD_SECONDS, then fades over FADE_SECONDS into the next. The sharp photo and the blurred
+// backdrop behind it always show the same one. The order is a fixed sequence worked out from
+// the card and the time, so the page's copy of an open card shows exactly the same photo.
 const random = (a: number, b: number) => {
   let h = Math.imul(a + 1, 374761393) ^ Math.imul(b + 1, 668265263)
   h = Math.imul(h ^ (h >>> 13), 1274126177)
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296
 }
-/** Which photo the card's backdrop shows at `t`: fading from `a` to `b` by `mix`. */
-export function backdropAt(card: number, count: number, t: number) {
+// how many steps back the random walk is replayed from; any start gives the same pattern
+const WALK = 8
+/** Which photo card `card`'s slideshow shows at `t`: fading from `a` to `b` by `mix`. */
+export function slideAt(card: number, count: number, t: number) {
   if (count < 2) return { a: 0, b: 0, mix: 0 }
-  // each card keeps its own beat, so they do not all change together
-  const time = Math.max(t, 0) + card * 1.9
-  const step = Math.floor(time / BACKDROP_CYCLE)
-  // never the same photo twice in a row
-  const pick = (s: number) => {
-    const raw = Math.floor(random(card, s) * count)
-    return raw === Math.floor(random(card, s - 1) * count) ? (raw + 1) % count : raw
-  }
-  const into = time - step * BACKDROP_CYCLE
-  return { a: pick(step), b: pick(step + 1), mix: THREE.MathUtils.smoothstep(into, BACKDROP_CYCLE - FADE_SECONDS, BACKDROP_CYCLE) }
+  const cycle = HOLD_SECONDS + FADE_SECONDS
+  const time = Math.max(t, 0)
+  const step = Math.floor(time / cycle)
+  // each step moves on by 1 to count - 1 photos, so the same one never shows twice in a row
+  let a = Math.floor(random(card, step - WALK) * count)
+  for (let s = step - WALK + 1; s <= step; s++) a = (a + 1 + Math.floor(random(card, s) * (count - 1))) % count
+  const b = (a + 1 + Math.floor(random(card, step + 1) * (count - 1))) % count
+  return { a, b, mix: THREE.MathUtils.smoothstep(time - step * cycle, HOLD_SECONDS, cycle) }
 }
 
 // run `work` when the browser has a quiet moment
@@ -253,7 +252,9 @@ export function createCard(
   // enlarged, blurred and washed out, with the card's text multiplied over it. The blur comes
   // from the photo's smaller mipmap levels, so it costs a few texture reads.
   bodyMaterial.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, backdrop)
+    // the backdrop shows the same photos as the face, read from the photo's own uniforms
+    const u = photoMaterial.uniforms
+    Object.assign(shader.uniforms, { uA: u.uA, uB: u.uB, uAspectA: u.uAspectA, uAspectB: u.uAspectB, uMix: u.uMix })
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
@@ -326,15 +327,6 @@ vec3 blurred(sampler2D photo, vec2 uv) {
   })
   if (!photos.length) photos.push({ texture: blank, aspect: 1 })
 
-  // what the blurred backdrop behind the face shows (see backdropAt)
-  const backdrop = {
-    uA: { value: blank as THREE.Texture },
-    uB: { value: blank as THREE.Texture },
-    uAspectA: { value: 1 },
-    uAspectB: { value: 1 },
-    uMix: { value: 0 },
-  }
-
   const photoMaterial = new THREE.ShaderMaterial({
     vertexShader: photoVertex,
     fragmentShader: photoFragment,
@@ -365,23 +357,15 @@ vec3 blurred(sampler2D photo, vec2 uv) {
     image: makeImage,
     /** `t` in seconds; cross-fades to the next photo every HOLD + FADE seconds. */
     update(t: number) {
-      const cycle = HOLD_SECONDS + FADE_SECONDS
-      const step = Math.floor(Math.max(t, 0) / cycle)
-      const a = photos[step % photos.length]
-      const b = photos[(step + 1) % photos.length]
+      const slide = slideAt(index, photos.length, t)
+      const a = photos[slide.a]
+      const b = photos[slide.b]
       const u = photoMaterial.uniforms
       u.uA.value = a.texture
       u.uB.value = b.texture
       u.uAspectA.value = a.aspect
       u.uAspectB.value = b.aspect
-      u.uMix.value = THREE.MathUtils.smoothstep(Math.max(t, 0) - step * cycle, HOLD_SECONDS, cycle)
-      // the backdrop goes its own random way through the same photos
-      const bg = backdropAt(index, photos.length, t)
-      backdrop.uA.value = photos[bg.a].texture
-      backdrop.uB.value = photos[bg.b].texture
-      backdrop.uAspectA.value = photos[bg.a].aspect
-      backdrop.uAspectB.value = photos[bg.b].aspect
-      backdrop.uMix.value = bg.mix
+      u.uMix.value = slide.mix
     },
     /** Darken the card, 0 not at all to 1 fully, for the ones that are not chosen. */
     setDim(amount: number) {

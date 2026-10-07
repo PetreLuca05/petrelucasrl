@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { MouseEvent } from 'react'
-import { backdropAt, FADE_SECONDS, HOLD_SECONDS } from './projects/card.ts'
+import { slideAt } from './projects/card.ts'
 import { projects } from './projects/data.ts'
 import { createScroller } from './projects/scroller.ts'
 import { createScene } from './scene.ts'
@@ -45,8 +45,6 @@ export default function App() {
   const [cardImage, setCardImage] = useState('')
   // each photo's width over its height, learnt as it loads, for the collapsed header
   const [aspects, setAspects] = useState<Record<string, number>>({})
-  // the photo behind the open card's blur, following the 3D card's random picks
-  const [backdrop, setBackdrop] = useState(0)
   const [closing, setClosing] = useState(false)
   const closeRef = useRef(() => {})
 
@@ -181,41 +179,18 @@ export default function App() {
     )
   }, [shown])
 
-  // the blurred backdrop follows the 3D card's own random walk through its photos (see backdropAt)
+  // The page's copy of the card follows the 3D card's slideshow (see slideAt), so the same
+  // photo, and the same blurred backdrop, show on both when one takes over from the other.
+  // Each image fades in and out by CSS as it becomes the current one.
   useEffect(() => {
     const follow = () => {
-      const count = projects[shown].photos.length
-      const bg = backdropAt(shown, count, sceneRef.current?.photoTime(shown) ?? 0)
-      setBackdrop(bg.mix < 0.5 ? bg.a : bg.b)
+      const slide = slideAt(shown, projects[shown].photos.length, sceneRef.current?.photoTime(shown) ?? 0)
+      setPhoto(slide.mix > 0 ? slide.b : slide.a)
     }
     follow()
-    const id = setInterval(follow, 250)
+    const id = setInterval(follow, 100)
     return () => clearInterval(id)
   }, [shown])
-
-  // The open card's photos keep cross-fading, picking up exactly where the 3D card's slideshow
-  // is so the same photo is showing on both when one takes over from the other.
-  useEffect(() => {
-    if (detail === null) return
-    const cycle = HOLD_SECONDS + FADE_SECONDS
-    const time = Math.max(sceneRef.current?.photoTime(detail) ?? 0, 0)
-    const step = Math.floor(time / cycle)
-    const into = time - step * cycle
-    const fading = into >= HOLD_SECONDS
-    setPhoto(fading ? step + 1 : step)
-    let interval = 0
-    const first = setTimeout(
-      () => {
-        setPhoto((n) => n + 1)
-        interval = setInterval(() => setPhoto((n) => n + 1), cycle * 1000)
-      },
-      (fading ? cycle - into + HOLD_SECONDS : HOLD_SECONDS - into) * 1000,
-    )
-    return () => {
-      clearTimeout(first)
-      clearInterval(interval)
-    }
-  }, [detail])
 
   return (
     <div
@@ -248,19 +223,19 @@ export default function App() {
             {/* the photo again, enlarged and blurred behind the collapsed header */}
             <div className="detail-backdrop">
               {projects[shown].photos.map((src, i) => (
-                <img key={i} src={src} alt="" className={i === backdrop ? 'on' : ''} />
+                <img key={i} src={src} alt="" className={i === photo ? 'on' : ''} />
               ))}
             </div>
             <div
               className="detail-photo"
-              style={{ '--photo-aspect': aspects[projects[shown].photos[photo % projects[shown].photos.length]] } as React.CSSProperties}
+              style={{ '--photo-aspect': aspects[projects[shown].photos[photo]] } as React.CSSProperties}
             >
               {projects[shown].photos.map((src, i) => (
                 <img
                   key={i}
                   src={src}
                   alt=""
-                  className={i === photo % projects[shown].photos.length ? 'on' : ''}
+                  className={i === photo ? 'on' : ''}
                   onLoad={(e) => {
                     const { naturalWidth: w, naturalHeight: h } = e.currentTarget
                     if (w && h) setAspects((known) => (known[src] ? known : { ...known, [src]: w / h }))
