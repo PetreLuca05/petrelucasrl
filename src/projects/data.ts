@@ -44,7 +44,7 @@ const p1Photos = [
   new URL('../../assets/p1/ewewewereertewrwr.PNG', import.meta.url).href,
 ]
 const p1Inserts: Insert[] = [
-  { model: new URL('../../assets/p1/playermodell.glb', import.meta.url).href, before: 1, side: 'right', animation: 'Player|Idle', spin: true, turn: 0.6 - Math.PI, toon: { Body: 'Style3', Eyes: 'Eyes 1' } },
+  { model: new URL('../../assets/p1/playermodell.glb', import.meta.url).href, before: 1, side: 'right', animation: 'Player|Idle', spin: true, turn: 0.6 - Math.PI + Math.PI / 4, toon: { Body: 'Style3', Eyes: 'Eyes 1' } },
   { model: new URL('../../assets/p1/Car.glb', import.meta.url).href, before: 3, side: 'left', spin: true, turn: 0.8 },
   { model: new URL('../../assets/p1/Calculator.glb', import.meta.url).href, before: 5, side: 'right', spin: true },
   { model: new URL('../../assets/p1/Pencil.glb', import.meta.url).href, before: 7, side: 'left', spin: true, turn: 0.4 },
