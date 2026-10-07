@@ -19,7 +19,6 @@ import { BLEED, fitToScreen } from './three/viewport.ts'
  */
 export type View = 'landing' | 'projects' | 'wheel' | 'grid'
 
-const WRAP_SECONDS = 1.8
 const FOV = 75
 const TITLE_DISTANCE = 5
 const SPHERE_RADIUS = 12
@@ -59,7 +58,7 @@ const DETAIL_MIN_SCALE = 0.5
 const easeInOutCubic = (x: number) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2)
 // eases out with a little overshoot, like something arriving on a spring
 const easeOutBack = (x: number, overshoot = 1.4) => 1 + (overshoot + 1) * Math.pow(x - 1, 3) + overshoot * Math.pow(x - 1, 2)
-const { clamp, damp, degToRad, radToDeg, smoothstep } = THREE.MathUtils
+const { clamp, damp, degToRad, radToDeg } = THREE.MathUtils
 
 /**
  * The whole site is one scene: the title in the dark, the white dome that closes around the
@@ -195,8 +194,6 @@ export function createScene(
   const cardsDuration = 0.1 + (count - 1) * CARD_STAGGER + CARD_ENTER
 
   let view: View = 'landing'
-  let wrapTarget = 0
-  let progress = 0
   // 0 on the landing, 1 once the projects have taken over the inside of the sphere
   let inside = 0
   let cardsTime = 0
@@ -432,11 +429,9 @@ export function createScene(
     const t = timer.getElapsed()
     now = t
 
-    progress = clamp(progress + (wrapTarget ? dt : -dt) / WRAP_SECONDS, 0, 1)
-    // the projects only take over once the sphere has closed around the view
-    const showProjects = view === 'projects' && progress === 1
-    showWheel = view === 'wheel' && progress === 1
-    showGrid = view === 'grid' && progress === 1
+    const showProjects = view === 'projects'
+    showWheel = view === 'wheel'
+    showGrid = view === 'grid'
     const showCards = showProjects || showWheel || showGrid
     const insideBefore = inside
     inside = clamp(inside + (showCards ? dt : -dt) / 0.8, 0, 1)
@@ -456,14 +451,12 @@ export function createScene(
     wheel.update(dt)
     pan.update(dt)
 
-    // The dome is always around the viewer. Wrapping washes the dark backdrop out to pure
-    // white, then the dome's grid fades in out of that white.
+    // the dome is always around the viewer, white with its grid, and the title always inked
     const uniforms = sphere.material.uniforms
-    uniforms.uWhite.value = smoothstep(progress, 0.1, 0.6)
-    uniforms.uGrid.value = smoothstep(progress, 0.6, 1)
-    title.uniforms.uInk.value = smoothstep(progress, 0.25, 0.55)
-    // the title only exists inside the dome; it is never shown over the camera feed
-    const titleOpacity = smoothstep(progress, 0.35, 0.7)
+    uniforms.uWhite.value = 1
+    uniforms.uGrid.value = 1
+    title.uniforms.uInk.value = 1
+    const titleOpacity = 1
     title.uniforms.uOpacity.value = titleOpacity
     uniforms.uTime.value = t
     ringAmount = damp(ringAmount, showProjects ? 1 : 0, 6, dt)
@@ -633,10 +626,6 @@ export function createScene(
   })
 
   return {
-    /** Wrap or unwrap the sphere around the view. The projects view keeps it wrapped. */
-    setWrapped(wrapped: boolean) {
-      wrapTarget = wrapped || view !== 'landing' ? 1 : 0
-    },
     /** Send the open card back to its place in the ring. */
     closeDetail,
     /** A picture of card `i` exactly as the scene draws it, minus the photo. */
@@ -649,7 +638,6 @@ export function createScene(
     },
     setView(next: View) {
       view = next
-      if (view !== 'landing') wrapTarget = 1
       // only the ring is looked around by panning; on the wheel and the grid the finger
       // moves the cards instead, and over the grid the view tips down to look at them
       look.setMode(view === 'projects' ? 'drag' : 'parallax')

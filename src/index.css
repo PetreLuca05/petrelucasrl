@@ -28,8 +28,8 @@ body {
   position: relative;
   height: calc(var(--vh, 100vh) + 280px);
   overflow: hidden;
-  background: #000;
-  color: #fff;
+  background: #f6f6f4;
+  color: #111;
   font-family: 'Space Grotesk', system-ui, sans-serif;
   font-weight: 700;
 }
@@ -57,7 +57,7 @@ button {
   border: 1px solid currentColor;
   /* a plain tint, not a backdrop blur: blurring the moving scene behind the button every
      frame is one of the most expensive things a phone can be asked to draw */
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.05);
   pointer-events: auto;
   transition:
     background 0.2s,
@@ -66,20 +66,6 @@ button {
 
 .pill:active {
   transform: scale(0.97);
-}
-
-.hint {
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.3em;
-  opacity: 0.75;
-  animation: pulse 2.4s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  50% {
-    opacity: 0.35;
-  }
 }
 
 /* The scene draws its own backdrop (see three/sphere.ts), so the canvas is opaque and nothing
@@ -139,13 +125,9 @@ button {
   transition: opacity 0.5s 0.9s;
 }
 
-.wrapped .landing-ui,
+.landing-ui,
 .projects-ui {
   color: #111;
-}
-
-.wrapped .pill {
-  background: rgba(0, 0, 0, 0.05);
 }
 
 /* Landing */

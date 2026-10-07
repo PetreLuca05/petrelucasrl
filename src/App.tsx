@@ -35,7 +35,6 @@ export default function App() {
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const sceneRef = useRef<ReturnType<typeof createScene> | null>(null)
-  const [wrapped, setWrapped] = useState(view === 'projects')
   // the opened project; `shown` keeps its text on screen while it fades out
   const [detail, setDetail] = useState<number | null>(null)
   const [shown, setShown] = useState(0)
@@ -122,24 +121,19 @@ export default function App() {
   }, [hash])
 
   useEffect(() => {
-    // switch the browser bars while the view is mid-way between dark and white
-    const id = setTimeout(() => setPageColor(wrapped ? '#f6f6f4' : '#000'), 700)
-    return () => clearTimeout(id)
-  }, [wrapped])
+    // Safari tints its bars to match the white dome
+    setPageColor('#f6f6f4')
+  }, [])
 
   const toggle = () => {
     // every tap, in either view, is a chance to ask for the motion sensors
     requestMotionPermission()
-    if (view !== 'landing') return
-    sceneRef.current?.setWrapped(!wrapped)
-    setWrapped(!wrapped)
   }
 
   // 'projects' is the ring of cards (Projects 0), 'wheel' the wheel (Projects 1), 'grid' the grid (Projects 2)
   const openProjects = (e: MouseEvent, target: 'projects' | 'wheel' | 'grid') => {
     e.stopPropagation()
     requestMotionPermission()
-    setWrapped(true)
     window.location.hash = target
     // mark the entry, so leaving the projects steps back to the landing instead of adding
     // another entry; otherwise a back swipe on the landing would jump into the projects
@@ -216,13 +210,12 @@ export default function App() {
   return (
     <div
       ref={screenRef}
-      className={`screen ${view}${wrapped ? ' wrapped' : ''}${detail !== null ? ' detail' : ''}${closing ? ' closing' : ''}`}
+      className={`screen ${view}${detail !== null ? ' detail' : ''}${closing ? ' closing' : ''}`}
       onClick={toggle}
     >
       <canvas ref={canvasRef} className="layer" />
 
       <div className="landing-ui">
-        <span className="hint">{wrapped ? 'Tap to return' : 'Tap to enter'}</span>
         <div className="pills">
           <button className="pill" onClick={(e) => openProjects(e, 'projects')}>
             Projects 0
