@@ -8,9 +8,6 @@ import type { View } from './scene.ts'
 import { requestMotionPermission } from './three/look.ts'
 import { setPageColor } from './three/viewport.ts'
 
-// how far the text has to move before the header snaps to its sticky strip (px)
-const STICKY_AFTER = 4
-
 // The address tracks where you are: '' is the landing, '#projects' the ring of cards and
 // '#projects/2' an open card. Each step is a history entry, so the browser's back button
 // goes from an open card to the ring, and from the ring to the landing.
@@ -143,8 +140,8 @@ export default function App() {
     history.replaceState({ fromLanding: true }, '', `#${target}`)
   }
 
-  // Scrolling the text switches the header between the full card and its sticky strip: the
-  // "Projects" label goes, the card rises and loses height, all at once. CSS does the moving and
+  // Scrolling the text works like a collapsing header. First the "Projects" label scrolls
+  // away and the card rises with it; then the card loses height. CSS does the moving and
   // resizing from these variables: pixels risen and lost, and each one's progress from 0 to 1.
   // The scroller reports its position in the same frame it moves the text, so the header
   // never lags behind.
@@ -158,14 +155,11 @@ export default function App() {
     const ui = projectsRef.current!
     let last = NaN
     reportRef.current = (y) => {
-      // two states, no in-between: the full card at the top, the sticky header once the text
-      // has moved at all (a few pixels, so a resting finger does not flicker between them)
-      const stuck = y > STICKY_AFTER
-      const away = stuck ? riseRoom + room + 20 : 0
+      const away = Math.min(Math.max(y, 0), riseRoom + room + 20)
       if (away === last) return
       last = away
-      const rise = stuck ? riseRoom : 0
-      const lost = stuck ? room : 0
+      const rise = Math.min(away, riseRoom)
+      const lost = Math.min(Math.max(away - riseRoom, 0), room)
       ui.style.setProperty('--detail-away', `${away}px`)
       ui.style.setProperty('--detail-rise', `${rise}px`)
       ui.style.setProperty('--detail-rise-progress', String(rise / riseRoom))
