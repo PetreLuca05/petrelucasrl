@@ -44,6 +44,8 @@ export function createScroller(viewport: HTMLElement, content: HTMLElement, onCh
   let lastFrame = 0
   let drawn = NaN
   let tween: { from: number; to: number; start: number; done: () => void } | null = null
+  // the stretch at the top a single wheel step crosses in one go (see setSnap)
+  let snap = 0
 
   const max = () => Math.max(content.offsetHeight - viewport.clientHeight, 0)
   const clamp = (value: number) => Math.min(Math.max(value, 0), max())
@@ -144,7 +146,11 @@ export function createScroller(viewport: HTMLElement, content: HTMLElement, onCh
     e.preventDefault()
     tween = null
     velocity = 0
-    y = want = clamp(y + e.deltaY * (e.deltaMode === 1 ? 16 : 1))
+    // inside the snap stretch one step goes all the way across it, down or back up
+    const delta = e.deltaY * (e.deltaMode === 1 ? 16 : 1)
+    if (delta > 0 && y < snap) y = want = clamp(snap)
+    else if (delta < 0 && y <= snap + 0.5) y = want = 0
+    else y = want = clamp(y + delta)
     run()
   }
 
@@ -158,6 +164,13 @@ export function createScroller(viewport: HTMLElement, content: HTMLElement, onCh
     /** Pixels the text has moved up. */
     get y() {
       return y
+    },
+    /**
+     * The first `distance` px are crossed by a single wheel step: down from the top lands at
+     * `distance`, and up from anywhere up to it lands back at the top. Fingers are unaffected.
+     */
+    setSnap(distance: number) {
+      snap = distance
     },
     /** Jump straight back to the top, without animating. */
     reset() {

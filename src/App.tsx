@@ -160,6 +160,8 @@ export default function App() {
       ui.style.setProperty('--detail-lost', `${lost}px`)
       ui.style.setProperty('--detail-progress', String(lost / room))
     }
+    // one wheel step takes the header from the full card straight to its mini strip, and back
+    scrollerRef.current?.setSnap(riseRoom + room)
     scrollerRef.current?.reset()
   }, [shown, detail])
 
