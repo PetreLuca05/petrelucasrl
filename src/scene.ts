@@ -38,6 +38,8 @@ const GRID_FARTHEST = 1.8
 const GRID_COLUMNS = 3
 const GRID_CARD_SCALE = 0.62
 const GRID_GAP = 0.3
+// how many cards' width (and height) the grid may slide past its outermost cards
+const GRID_PAN_MARGIN = 1
 const MIN_HORIZONTAL_FOV = 58
 const FOCUS_SCALE = 0.12
 // how far (radians) the aimed-at card tips back when the crosshair is at its very edge
@@ -149,13 +151,11 @@ export function createScene(
   const gridRows = Math.ceil(count / GRID_COLUMNS)
   const gridPitchX = cardWidth * GRID_CARD_SCALE + GRID_GAP
   const gridPitchZ = cardHeight * GRID_CARD_SCALE + GRID_GAP
-  // it slides just far enough for the lens at the centre to reach every card
-  pan.setBounds(
-    (-(GRID_COLUMNS - 1) / 2) * gridPitchX,
-    ((GRID_COLUMNS - 1) / 2) * gridPitchX,
-    (-(gridRows - 1) / 2) * gridPitchZ,
-    ((gridRows - 1) / 2) * gridPitchZ,
-  )
+  // it slides far enough for the lens at the centre to reach every card, and on past the
+  // outermost ones by GRID_PAN_MARGIN cards each way
+  const panX = ((GRID_COLUMNS - 1) / 2 + GRID_PAN_MARGIN) * gridPitchX
+  const panY = ((gridRows - 1) / 2 + GRID_PAN_MARGIN) * gridPitchZ
+  pan.setBounds(-panX, panX, -panY, panY)
   const gridPosition = new THREE.Vector3()
   // lying flat, its top toward the far side, which is up on the screen when looking down
   // standing upright like a wall in front of the viewer, every card facing the camera
