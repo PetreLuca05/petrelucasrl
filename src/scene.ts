@@ -21,7 +21,7 @@ export type View = 'landing' | 'wheel' | 'grid'
 
 const FOV = 75
 const TITLE_DISTANCE = 5
-const SPHERE_RADIUS = 12
+const SPHERE_RADIUS = 24
 const CARD_DISTANCE = 4
 // The wheel of projects: cards around a circle in front of the camera, facing outward, the
 // front one CARD_DISTANCE away like a card of the ring. Its smallest radius (it grows with

@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { MouseEvent } from 'react'
-import { FADE_SECONDS, HOLD_SECONDS } from './projects/card.ts'
+import { backdropAt, FADE_SECONDS, HOLD_SECONDS } from './projects/card.ts'
 import { projects } from './projects/data.ts'
 import { createScroller } from './projects/scroller.ts'
 import { createScene } from './scene.ts'
@@ -45,6 +45,8 @@ export default function App() {
   const [cardImage, setCardImage] = useState('')
   // each photo's width over its height, learnt as it loads, for the collapsed header
   const [aspects, setAspects] = useState<Record<string, number>>({})
+  // the photo behind the open card's blur, following the 3D card's random picks
+  const [backdrop, setBackdrop] = useState(0)
   const [closing, setClosing] = useState(false)
   const closeRef = useRef(() => {})
 
@@ -179,6 +181,18 @@ export default function App() {
     )
   }, [shown])
 
+  // the blurred backdrop follows the 3D card's own random walk through its photos (see backdropAt)
+  useEffect(() => {
+    const follow = () => {
+      const count = projects[shown].photos.length
+      const bg = backdropAt(shown, count, sceneRef.current?.photoTime(shown) ?? 0)
+      setBackdrop(bg.mix < 0.5 ? bg.a : bg.b)
+    }
+    follow()
+    const id = setInterval(follow, 250)
+    return () => clearInterval(id)
+  }, [shown])
+
   // The open card's photos keep cross-fading, picking up exactly where the 3D card's slideshow
   // is so the same photo is showing on both when one takes over from the other.
   useEffect(() => {
@@ -234,7 +248,7 @@ export default function App() {
             {/* the photo again, enlarged and blurred behind the collapsed header */}
             <div className="detail-backdrop">
               {projects[shown].photos.map((src, i) => (
-                <img key={i} src={src} alt="" className={i === photo % projects[shown].photos.length ? 'on' : ''} />
+                <img key={i} src={src} alt="" className={i === backdrop ? 'on' : ''} />
               ))}
             </div>
             <div
