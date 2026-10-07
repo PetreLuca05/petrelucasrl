@@ -184,7 +184,7 @@ export default function App() {
   // Each image fades in and out by CSS as it becomes the current one.
   useEffect(() => {
     const follow = () => {
-      const slide = slideAt(shown, projects[shown].photos.length, sceneRef.current?.photoTime(shown) ?? 0)
+      const slide = slideAt(projects[shown].photos.length, sceneRef.current?.photoTime(shown) ?? 0)
       setPhoto(slide.mix > 0 ? slide.b : slide.a)
     }
     follow()

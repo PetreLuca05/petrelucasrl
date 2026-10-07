@@ -24,28 +24,20 @@ const PHOTO_MAX_SIZE = 1024
 export const HOLD_SECONDS = 3
 export const FADE_SECONDS = 1.2
 
-// Each card's slideshow goes through its photos in a random order: one is held for
-// HOLD_SECONDS, then fades over FADE_SECONDS into the next. The sharp photo and the blurred
-// backdrop behind it always show the same one. The order is a fixed sequence worked out from
-// the card and the time, so the page's copy of an open card shows exactly the same photo.
-const random = (a: number, b: number) => {
-  let h = Math.imul(a + 1, 374761393) ^ Math.imul(b + 1, 668265263)
-  h = Math.imul(h ^ (h >>> 13), 1274126177)
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296
-}
-/** Which photo card `card`'s slideshow shows at `t`: fading from `a` to `b` by `mix`. */
-export function slideAt(card: number, count: number, t: number) {
+// Each card's slideshow goes through its photos in order: one is held for HOLD_SECONDS, then
+// fades over FADE_SECONDS into the next. The sharp photo and the blurred backdrop behind it
+// always show the same one, and the page's copy of an open card follows the same clock.
+// Each card runs a little behind the one before (see SLIDE_OFFSET), so they change at
+// different moments.
+/** Seconds each card's slideshow runs behind the card before it. */
+export const SLIDE_OFFSET = 1.3
+/** Which photo a slideshow at `t` seconds shows: fading from `a` to `b` by `mix`. */
+export function slideAt(count: number, t: number) {
   if (count < 2) return { a: 0, b: 0, mix: 0 }
   const cycle = HOLD_SECONDS + FADE_SECONDS
   const time = Math.max(t, 0)
   const step = Math.floor(time / cycle)
-  // A pick depends only on its own step, so the photo a fade ends on is exactly the one the
-  // next step starts from. One that would repeat the step before's raw pick moves on by one.
-  const pick = (s: number) => {
-    const raw = Math.floor(random(card, s) * count)
-    return raw === Math.floor(random(card, s - 1) * count) ? (raw + 1) % count : raw
-  }
-  return { a: pick(step), b: pick(step + 1), mix: THREE.MathUtils.smoothstep(time - step * cycle, HOLD_SECONDS, cycle) }
+  return { a: step % count, b: (step + 1) % count, mix: THREE.MathUtils.smoothstep(time - step * cycle, HOLD_SECONDS, cycle) }
 }
 
 // run `work` when the browser has a quiet moment
@@ -361,7 +353,7 @@ vec3 blurred(sampler2D photo, vec2 uv) {
     image: makeImage,
     /** `t` in seconds; cross-fades to the next photo every HOLD + FADE seconds. */
     update(t: number) {
-      const slide = slideAt(index, photos.length, t)
+      const slide = slideAt(photos.length, t)
       const a = photos[slide.a]
       const b = photos[slide.b]
       const u = photoMaterial.uniforms

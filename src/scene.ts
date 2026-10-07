@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { createLogo } from './landing/logo.ts'
 import { createTitle } from './landing/title.ts'
-import { createCard } from './projects/card.ts'
+import { createCard, SLIDE_OFFSET } from './projects/card.ts'
 import { createLens } from './projects/lens.ts'
 import type { Insert, Project } from './projects/data.ts'
 import { createInserts } from './projects/inserts.ts'
@@ -588,7 +588,7 @@ export function createScene(
           group.scale.setScalar(Math.max(scale * (1 - open), 0.001))
         }
         // offset each card so they don't all fade in step
-        card.update(t - i * 0.7)
+        card.update(t - i * SLIDE_OFFSET)
       })
     }
     tapped = false
@@ -616,7 +616,7 @@ export function createScene(
     /** A picture of card `i` exactly as the scene draws it, minus the photo. */
     cardImage: (i: number) => cards[i].image(),
     /** Where card `i`'s photo slideshow is, in seconds (see card.update). */
-    photoTime: (i: number) => now - i * 0.7,
+    photoTime: (i: number) => now - i * SLIDE_OFFSET,
     /** The page's boxes for the open write-up's 3D models, and the text column that clips them. */
     setInserts(items: { element: HTMLElement; insert: Insert }[], list: HTMLElement) {
       inserts.set(items, list)
