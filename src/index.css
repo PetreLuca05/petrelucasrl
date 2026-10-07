@@ -256,15 +256,25 @@ button {
   opacity: calc(1 - 5 * var(--detail-progress, 0));
 }
 
-/* The photo keeps its 6:7 shape as the card loses height. Its size is spelled out from the
-   card's height (minus padding and border) because Safari does not reliably size a flex item
-   from a percentage height plus aspect-ratio. */
+/* The photo's shape, which eases from one to the next as the slideshow moves on. Registered
+   so it can be transitioned on its own, leaving the width free to follow the scroll exactly. */
+@property --photo-aspect {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0.857143;
+}
+
+/* The photo starts in the card's 6:7 shape, matching the 3D card it takes over from, and
+   widens to the picture's own shape as the header collapses into its sticky strip. Its size
+   is spelled out from the card's height (minus padding and border) because Safari does not
+   reliably size a flex item from a percentage height plus aspect-ratio. */
 .detail-photo {
   --photo-height: calc(var(--detail-card, 150px) - var(--detail-lost, 0px) - 64 * var(--u));
   position: relative;
   z-index: 2;
   flex: none;
-  width: calc(var(--photo-height) * 6 / 7);
+  width: calc(var(--photo-height) * (6 / 7 + (var(--photo-aspect) - 6 / 7) * var(--detail-progress, 0)));
+  transition: --photo-aspect 1.2s;
   height: var(--photo-height);
   overflow: hidden;
   border-radius: calc(20 * var(--u));

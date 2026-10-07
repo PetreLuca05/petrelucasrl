@@ -50,6 +50,8 @@ export default function App() {
   const [photo, setPhoto] = useState(0)
   // a picture of the 3D card, laid over the page's copy so the hand-over between them is exact
   const [cardImage, setCardImage] = useState('')
+  // each photo's width over its height, learnt as it loads, for the collapsed header
+  const [aspects, setAspects] = useState<Record<string, number>>({})
   const [closing, setClosing] = useState(false)
   const closeRef = useRef(() => {})
 
@@ -243,9 +245,21 @@ export default function App() {
         <div className="detail-head">
           <div className="detail-card">
             {cardImage && <img className="detail-card-image" src={cardImage} alt="" />}
-            <div className="detail-photo">
+            <div
+              className="detail-photo"
+              style={{ '--photo-aspect': aspects[projects[shown].photos[photo % projects[shown].photos.length]] } as React.CSSProperties}
+            >
               {projects[shown].photos.map((src, i) => (
-                <img key={i} src={src} alt="" className={i === photo % projects[shown].photos.length ? 'on' : ''} />
+                <img
+                  key={i}
+                  src={src}
+                  alt=""
+                  className={i === photo % projects[shown].photos.length ? 'on' : ''}
+                  onLoad={(e) => {
+                    const { naturalWidth: w, naturalHeight: h } = e.currentTarget
+                    if (w && h) setAspects((known) => (known[src] ? known : { ...known, [src]: w / h }))
+                  }}
+                />
               ))}
             </div>
             <div className="detail-text">
