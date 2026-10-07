@@ -11,6 +11,8 @@ const BACKDROP_ZOOM = 1.5
 const BACKDROP_LOD = 4.5
 const BACKDROP_SATURATION = 1.4
 const BACKDROP_WASH = 0.5
+// how far in from its edges the photo fades into the backdrop, as a share of its height
+const PHOTO_EDGE = 0.09
 // photo slot on the card canvas; the text column starts to its right
 const PHOTO = { x: 32, y: 32, w: 384, h: 448 }
 const TEXT_X = 456
@@ -123,11 +125,12 @@ const photoFragment = /* glsl */ `
     vec3 a = texture2D(uA, cover(vUv, uAspectA)).rgb;
     vec3 b = texture2D(uB, cover(vUv, uAspectB)).rgb;
 
-    // rounded corners
+    // rounded corners, and edges that melt into the blurred backdrop over PHOTO_EDGE of the
+    // photo's height (the page's copy does the same, see .detail-photo in index.css)
     const float radius = 0.045;
     vec2 p = abs((vUv - 0.5) * vec2(uAspect, 1.0)) - (vec2(uAspect, 1.0) * 0.5 - radius);
-    float d = length(max(p, 0.0)) - radius;
-    float alpha = 1.0 - smoothstep(-fwidth(d), 0.0, d);
+    float d = length(max(p, 0.0)) + min(max(p.x, p.y), 0.0) - radius;
+    float alpha = 1.0 - smoothstep(-${PHOTO_EDGE.toFixed(3)}, 0.0, d);
 
     gl_FragColor = vec4(displayColor(mix(a, b, uMix) * uDim), alpha);
   }

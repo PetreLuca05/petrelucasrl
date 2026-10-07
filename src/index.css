@@ -267,10 +267,10 @@ button {
   background: #d6d8dc;
 }
 
-/* In the collapsed header the photo's edges melt into the blurred copy behind it. The fade
-   grows with the collapse, so at full size the photo is crisp like the 3D card's. */
+/* The photo's edges melt into the blurred copy behind it, over the same share of its height
+   as on the 3D card (PHOTO_EDGE in projects/card.ts). */
 .detail-photo {
-  --edge: calc(18px * var(--detail-progress, 0));
+  --edge: calc(var(--photo-height) * 0.09);
   -webkit-mask-image:
     linear-gradient(to right, transparent, #000 var(--edge), #000 calc(100% - var(--edge)), transparent),
     linear-gradient(to bottom, transparent, #000 var(--edge), #000 calc(100% - var(--edge)), transparent);
