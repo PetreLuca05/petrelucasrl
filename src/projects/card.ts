@@ -273,7 +273,9 @@ vec3 blurred(sampler2D photo, vec2 uv) {
   vec3 c = textureLod(photo, uv, lod).rgb * 2.0;
   c += textureLod(photo, uv + vec2(d, 0.0), lod).rgb + textureLod(photo, uv - vec2(d, 0.0), lod).rgb;
   c += textureLod(photo, uv + vec2(0.0, d), lod).rgb + textureLod(photo, uv - vec2(0.0, d), lod).rgb;
-  return sRGBTransferEOTF(vec4(c / 6.0, 1.0)).rgb;
+  // still in the photo's sRGB values: the saturation and wash below are done in those, as the
+  // browser does for the page's copy (CSS filters and blending work in sRGB)
+  return c / 6.0;
 }`,
       )
       .replace(
@@ -283,7 +285,8 @@ vec3 blurred(sampler2D photo, vec2 uv) {
         vec3 photo = mix(blurred(uA, backdropUv(vMapUv, uAspectA)), blurred(uB, backdropUv(vMapUv, uAspectB)), uMix);
         // a touch more colour, as a blur greys things out, then washed out toward white
         photo = mix(vec3(dot(photo, vec3(0.2126, 0.7152, 0.0722))), photo, ${BACKDROP_SATURATION.toFixed(2)});
-        diffuseColor.rgb *= mix(photo, vec3(1.0), ${BACKDROP_WASH.toFixed(2)});
+        vec3 washed = mix(clamp(photo, 0.0, 1.0), vec3(1.0), ${BACKDROP_WASH.toFixed(2)});
+        diffuseColor.rgb *= sRGBTransferEOTF(vec4(washed, 1.0)).rgb;
       } else {
         diffuseColor.rgb *= ${BACK_SHADE.toFixed(3)};
       }`,

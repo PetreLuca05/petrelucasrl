@@ -34,9 +34,9 @@ const WHEEL_SINK = 1.2
 // A pinch brings them nearer or farther, between the two shares of that depth.
 const GRID_DEPTH = 6.2
 // how near the camera starts to the grid, as a share of GRID_DEPTH (pinching moves it on)
-const GRID_START = 1.4
-const GRID_NEAREST = 0.9
-const GRID_FARTHEST = 3.6
+const GRID_START = 0.35
+const GRID_NEAREST = 0.225
+const GRID_FARTHEST = 0.9
 const GRID_COLUMNS = 3
 const GRID_CARD_SCALE = 0.62
 const GRID_GAP = 0.12

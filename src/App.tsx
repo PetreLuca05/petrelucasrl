@@ -179,17 +179,30 @@ export default function App() {
     )
   }, [shown])
 
-  // The page's copy of the card follows the 3D card's slideshow (see slideAt), so the same
-  // photo, and the same blurred backdrop, show on both when one takes over from the other.
-  // Each image fades in and out by CSS as it becomes the current one.
+  // The page's copy of the card plays the 3D card's slideshow (see slideAt) frame by frame, so
+  // the same photo, and the same blurred backdrop, show on both. As on the 3D card the next
+  // photo is laid over the current one, fading in over it: the current one stays fully there
+  // underneath, so nothing behind them shows through halfway.
+  const photoBoxRef = useRef<HTMLDivElement>(null)
+  const backdropRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    const follow = () => {
+    let frame = 0
+    const tick = () => {
       const slide = slideAt(projects[shown].photos.length, sceneRef.current?.photoTime(shown) ?? 0)
-      setPhoto(slide.mix > 0 ? slide.b : slide.a)
+      for (const box of [photoBoxRef.current, backdropRef.current]) {
+        box?.querySelectorAll('img').forEach((img, i) => {
+          const fading = i === slide.b && slide.b !== slide.a
+          img.style.opacity = fading ? slide.mix.toFixed(3) : i === slide.a ? '1' : '0'
+          img.style.zIndex = fading ? '1' : '0'
+        })
+      }
+      // the photo's shape follows whichever is mostly showing
+      const current = slide.mix > 0.5 ? slide.b : slide.a
+      setPhoto((shownPhoto) => (shownPhoto === current ? shownPhoto : current))
+      frame = requestAnimationFrame(tick)
     }
-    follow()
-    const id = setInterval(follow, 100)
-    return () => clearInterval(id)
+    tick()
+    return () => cancelAnimationFrame(frame)
   }, [shown])
 
   return (
@@ -221,12 +234,13 @@ export default function App() {
           <div className="detail-card">
             {cardImage && <img className="detail-card-image" src={cardImage} alt="" />}
             {/* the photo again, enlarged and blurred behind the collapsed header */}
-            <div className="detail-backdrop">
+            <div ref={backdropRef} className="detail-backdrop">
               {projects[shown].photos.map((src, i) => (
-                <img key={i} src={src} alt="" className={i === photo ? 'on' : ''} />
+                <img key={i} src={src} alt="" />
               ))}
             </div>
             <div
+              ref={photoBoxRef}
               className="detail-photo"
               style={{ '--photo-aspect': aspects[projects[shown].photos[photo]] } as React.CSSProperties}
             >
@@ -235,7 +249,6 @@ export default function App() {
                   key={i}
                   src={src}
                   alt=""
-                  className={i === photo ? 'on' : ''}
                   onLoad={(e) => {
                     const { naturalWidth: w, naturalHeight: h } = e.currentTarget
                     if (w && h) setAspects((known) => (known[src] ? known : { ...known, [src]: w / h }))
