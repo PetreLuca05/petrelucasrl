@@ -224,8 +224,7 @@ button {
   opacity: calc(1 - 5 * var(--detail-progress, 0));
 }
 
-/* The photo's shape, which eases from one to the next as the slideshow moves on. Registered
-   so it can be transitioned on its own, leaving the width free to follow the scroll exactly. */
+/* The photo's shape (width over height), set by the page for the photo now showing. */
 @property --photo-aspect {
   syntax: '<number>';
   inherits: true;
@@ -242,7 +241,6 @@ button {
   z-index: 3;
   flex: none;
   width: calc(var(--photo-height) * (6 / 7 + (var(--photo-aspect) - 6 / 7) * var(--detail-progress, 0)));
-  transition: --photo-aspect 1.2s;
   height: var(--photo-height);
   overflow: hidden;
   border-radius: calc(20 * var(--u));
