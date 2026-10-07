@@ -234,7 +234,8 @@ button {
   inset: -1px;
   width: calc(100% + 2px);
   height: calc(100% + 2px);
-  z-index: 1;
+  /* above the live text it covers, below the photo */
+  z-index: 2;
   opacity: calc(1 - 5 * var(--detail-progress, 0));
 }
 
@@ -253,7 +254,7 @@ button {
 .detail-photo {
   --photo-height: calc(var(--detail-card, 150px) - var(--detail-lost, 0px) - 64 * var(--u));
   position: relative;
-  z-index: 2;
+  z-index: 3;
   flex: none;
   width: calc(var(--photo-height) * (6 / 7 + (var(--photo-aspect) - 6 / 7) * var(--detail-progress, 0)));
   transition: --photo-aspect 1.2s;
@@ -292,8 +293,9 @@ button {
 }
 
 .detail-text {
+  /* above the blurred backdrop, under the picture of the card while that covers it */
   position: relative;
-  z-index: 2;
+  z-index: 1;
   min-width: 0;
   overflow: hidden;
 }
