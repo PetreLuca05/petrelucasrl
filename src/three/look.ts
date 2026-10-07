@@ -64,7 +64,8 @@ export function createLook(camera: THREE.PerspectiveCamera) {
   let leanPitch = 0
   // the direction the view rests in: straight ahead, or tipped down to look at the grid
   let basePitch = 0
-  let basePitchTarget = 0
+  // set when the view changes, so the camera jumps to its new angle instead of swinging there
+  let snap = false
   let lastT: number | null = null
   let pointerX = 0
   let pointerY = 0
@@ -153,9 +154,11 @@ export function createLook(camera: THREE.PerspectiveCamera) {
     setPan(enabled: boolean) {
       pan = enabled
     },
-    /** Tip the resting view up or down by `angle` radians (negative looks down); it swings there smoothly. */
+    /** Tip the resting view up or down by `angle` radians (negative looks down), at once. */
     setBasePitch(angle: number) {
-      basePitchTarget = angle
+      if (angle === basePitch) return
+      basePitch = angle
+      snap = true
     },
     /** `t` in seconds, for the handheld shake. */
     update(t: number) {
@@ -187,7 +190,6 @@ export function createLook(camera: THREE.PerspectiveCamera) {
       }
       leanYaw = damp(leanYaw, wantYaw, LEAN_FOLLOW, dt)
       leanPitch = damp(leanPitch, wantPitch, LEAN_FOLLOW, dt)
-      basePitch = damp(basePitch, basePitchTarget, 4, dt)
       // a slow, slightly irregular wobble, as if the camera were held by hand
       const shakeYaw = (Math.sin(t * 1.3) + Math.sin(t * 2.9 + 1.7) * 0.5) * SHAKE
       const shakePitch = (Math.sin(t * 1.7 + 0.6) + Math.sin(t * 3.7 + 4.1) * 0.5) * SHAKE
@@ -198,7 +200,9 @@ export function createLook(camera: THREE.PerspectiveCamera) {
       euler.set(basePitch + dragPitch + sway.pitch, dragYaw + sway.yaw, sway.roll, 'YXZ')
       target.setFromEuler(euler)
       // eased by time, not by frame, so it feels the same at 60 and 120 frames a second
-      camera.quaternion.slerp(target, 1 - Math.exp(-dt * (mode === 'drag' ? 14 : 5)))
+      if (snap) camera.quaternion.copy(target)
+      else camera.quaternion.slerp(target, 1 - Math.exp(-dt * (mode === 'drag' ? 14 : 5)))
+      snap = false
     },
     dispose() {
       window.removeEventListener('deviceorientation', onOrientation)
