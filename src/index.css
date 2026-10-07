@@ -75,13 +75,11 @@ button {
   cursor: pointer;
 }
 
-.screen.projects,
 .screen.wheel,
 .screen.grid {
   cursor: grab;
 }
 
-.screen.projects:active,
 .screen.wheel:active,
 .screen.grid:active {
   cursor: grabbing;
@@ -117,7 +115,6 @@ button {
 }
 
 /* the projects controls wait for the sphere to close around the view */
-.projects .projects-ui,
 .wheel .projects-ui,
 .grid .projects-ui {
   opacity: 1;

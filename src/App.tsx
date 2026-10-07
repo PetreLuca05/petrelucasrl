@@ -8,10 +8,10 @@ import type { View } from './scene.ts'
 import { requestMotionPermission } from './three/look.ts'
 import { setPageColor } from './three/viewport.ts'
 
-// The address tracks where you are: '' is the landing, '#projects' the ring of cards and
-// '#projects/2' an open card. Each step is a history entry, so the browser's back button
-// goes from an open card to the ring, and from the ring to the landing.
-const OPEN_CARD = /^#(projects|wheel|grid)\/\d+$/
+// The address tracks where you are: '' is the landing, '#wheel' or '#grid' the cards and
+// '#wheel/2' an open card. Each step is a history entry, so the browser's back button goes
+// from an open card to the cards, and from the cards to the landing.
+const OPEN_CARD = /^#(wheel|grid)\/\d+$/
 
 // A load always starts from the landing, whatever the address says. Otherwise a reload (or
 // the browser restoring the tab) in the projects would play the whole entrance by itself,
@@ -25,13 +25,7 @@ function subscribe(onChange: () => void) {
 
 export default function App() {
   const hash = useSyncExternalStore(subscribe, () => window.location.hash)
-  const view: View = hash.startsWith('#projects')
-    ? 'projects'
-    : hash.startsWith('#wheel')
-      ? 'wheel'
-      : hash.startsWith('#grid')
-        ? 'grid'
-        : 'landing'
+  const view: View = hash.startsWith('#wheel') ? 'wheel' : hash.startsWith('#grid') ? 'grid' : 'landing'
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const sceneRef = useRef<ReturnType<typeof createScene> | null>(null)
@@ -89,7 +83,7 @@ export default function App() {
         if (index !== null) {
           setShown(index)
           setCardImage(sceneRef.current?.cardImage(index) ?? '')
-          const base = window.location.hash.replace(/\/\d+$/, '').slice(1) || 'projects'
+          const base = window.location.hash.replace(/\/\d+$/, '').slice(1) || 'wheel'
           window.location.hash = `${base}/${index + 1}`
         } else if (OPEN_CARD.test(window.location.hash)) {
           // closed by a tap: step back so the history matches what is on screen
@@ -130,8 +124,8 @@ export default function App() {
     requestMotionPermission()
   }
 
-  // 'projects' is the ring of cards (Projects 0), 'wheel' the wheel (Projects 1), 'grid' the grid (Projects 2)
-  const openProjects = (e: MouseEvent, target: 'projects' | 'wheel' | 'grid') => {
+  // 'wheel' is the wheel of cards (Projects 1), 'grid' the grid (Projects 2)
+  const openProjects = (e: MouseEvent, target: 'wheel' | 'grid') => {
     e.stopPropagation()
     requestMotionPermission()
     window.location.hash = target
@@ -217,9 +211,6 @@ export default function App() {
 
       <div className="landing-ui">
         <div className="pills">
-          <button className="pill" onClick={(e) => openProjects(e, 'projects')}>
-            Projects 0
-          </button>
           <button className="pill" onClick={(e) => openProjects(e, 'wheel')}>
             Projects 1
           </button>
@@ -231,7 +222,7 @@ export default function App() {
 
       <div ref={projectsRef} className="projects-ui">
         <div className="projects-top">
-          <span className="projects-title">{view === 'wheel' ? 'Projects 1' : view === 'grid' ? 'Projects 2' : 'Projects 0'}</span>
+          <span className="projects-title">{view === 'grid' ? 'Projects 2' : 'Projects 1'}</span>
         </div>
         {/* the open card and its text lean and shake with the camera (see onSway) */}
         <div ref={floatRef} className="detail-float">

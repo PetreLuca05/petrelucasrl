@@ -14,10 +14,10 @@ import { Spring } from './three/spring.ts'
 import { BLEED, fitToScreen } from './three/viewport.ts'
 
 /**
- * 'projects' is the ring of cards around the viewer, 'wheel' the wheel of cards in front, and
- * 'grid' the cards laid out flat below, seen from above.
+ * 'wheel' is the wheel of cards in front of the viewer, and
+ * 'grid' the cards standing in rows and columns like a wall in front of the viewer.
  */
-export type View = 'landing' | 'projects' | 'wheel' | 'grid'
+export type View = 'landing' | 'wheel' | 'grid'
 
 const FOV = 75
 const TITLE_DISTANCE = 5
@@ -29,8 +29,8 @@ const CARD_DISTANCE = 4
 // one card is open.
 const WHEEL_RADIUS = 2.6
 const WHEEL_SINK = 1.2
-// The grid of projects: cards lying flat this far below the camera, which looks straight
-// down at them, this many across, drawn at this share of their ring size, this far apart.
+// The grid of projects: cards standing this far in front of the camera, this many across,
+// drawn at this share of their full size, this far apart.
 // A pinch brings them nearer or farther, between the two shares of that depth.
 const GRID_DEPTH = 6.2
 const GRID_NEAREST = 0.45
@@ -91,13 +91,12 @@ export function createScene(
   const look = createLook(camera)
 
   const count = projects.length
-  // The ring: one row of cards around the viewer, or two rows once there are too many for
-  // the cards to stay a good size. Each column of the ring is a section of the dome.
+  // The cards are sized as if laid in a row (two once there are many) around the viewer, a
+  // size that reads well on the wheel and the grid alike.
   const rows = count > 8 ? 2 : 1
   const columns = Math.ceil(count / rows)
   const sphere = createSphere()
   sphere.scale.setScalar(SPHERE_RADIUS)
-  sphere.material.uniforms.uSections.value = columns
   scene.add(sphere)
 
   // soft studio surroundings for the steel logo to reflect; nothing else in the scene is lit
@@ -119,8 +118,6 @@ export function createScene(
   const logo = createLogo()
   brand.add(title.group, logo.group)
 
-  // u is the sphere's texture coordinate around the vertical axis; 0.75 is straight ahead
-  const sectionU = (i: number) => 0.75 - Math.floor(i / rows) / columns
   const cardAngle = degToRad(Math.min(44, (360 / columns) * 0.75))
   const cardWidth = 2 * CARD_DISTANCE * Math.tan(cardAngle / 2)
   const cardHeight = cardWidth / 2
@@ -131,20 +128,11 @@ export function createScene(
   scene.add(cardRing)
   const cards = projects.map((project, i) => {
     const card = createCard(project, i, cardWidth, { ring: CARD_DISTANCE, wheel: wheelRadius }, renderer)
-    const phi = sectionU(i) * Math.PI * 2
-    // with two rows, the cards of a column sit one above the other
-    const y = rows === 1 ? 0 : (i % 2 === 0 ? 0.56 : -0.56) * cardHeight
-    card.group.position.set(-Math.cos(phi) * CARD_DISTANCE, y, Math.sin(phi) * CARD_DISTANCE)
-    card.group.lookAt(0, y, 0)
+    card.setShape('wheel')
     cardRing.add(card.group)
     return card
   })
-  // the cards' places in the ring
-  const homes = cards.map((card) => ({
-    position: card.group.position.clone(),
-    quaternion: card.group.quaternion.clone(),
-  }))
-  // and on the wheel, worked out each frame from how far it has turned
+  // the cards' places on the wheel, worked out each frame from how far it has turned
   const wheel = createWheel(count)
   const wheelPosition = new THREE.Vector3()
   const wheelQuaternion = new THREE.Quaternion()
@@ -155,7 +143,7 @@ export function createScene(
     // facing away from the wheel's centre, so the front card faces the camera
     wheelQuaternion.setFromEuler(wheelEuler.set(-phi, 0, 0))
   }
-  // and on the grid below, which slides about under the finger
+  // and on the grid, which slides about under the finger
   const pan = createPan()
   pan.setDepthRange(GRID_DEPTH * GRID_NEAREST, GRID_DEPTH * GRID_FARTHEST, GRID_DEPTH)
   const gridRows = Math.ceil(count / GRID_COLUMNS)
@@ -170,19 +158,20 @@ export function createScene(
   )
   const gridPosition = new THREE.Vector3()
   // lying flat, its top toward the far side, which is up on the screen when looking down
-  const gridQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0))
+  // standing upright like a wall in front of the viewer, every card facing the camera
+  const gridQuaternion = new THREE.Quaternion()
   const placeOnGrid = (i: number) => {
     const column = i % GRID_COLUMNS
     const row = Math.floor(i / GRID_COLUMNS)
-    // looking down, up on the screen is toward negative z, so the first row goes there
+    // the first row at the top; a finger moving down (pan.y growing) moves the wall down
     gridPosition.set(
       (column - (GRID_COLUMNS - 1) / 2) * gridPitchX + pan.x,
+      -((row - (gridRows - 1) / 2) * gridPitchZ + pan.y),
       -pan.depth,
-      (row - (gridRows - 1) / 2) * gridPitchZ + pan.y,
     )
   }
   // which arrangement the cards are in; only changes while none of them is showing
-  let cardsMode: 'ring' | 'wheel' | 'grid' = 'ring'
+  let cardsMode: 'wheel' | 'grid' = 'wheel'
   const bodies = cards.map((card) => card.body)
   // how far each card is the chosen one, 0 to 1, popping up and down on a spring
   const focus = cards.map(() => new Spring())
@@ -199,8 +188,6 @@ export function createScene(
   let cardsTime = 0
   let showWheel = false
   let showGrid = false
-  // the dome's sections belong to the ring; this fades them out on the wheel
-  let ringAmount = 0
   let focused: number | null = null
   let titleScale = 1
   // the open card: `detail` while it is open, `detailCard` until it has flown back home, and
@@ -225,7 +212,7 @@ export function createScene(
   const swayShift = new THREE.Matrix4()
   let swaying = false
 
-  // Taps do all the navigating among the projects. In the ring: on the card under the lens to
+  // Taps do all the navigating among the projects. On the grid: on the card under the lens to
   // open it, on empty space to leave. On the wheel: on the front card to open it, on another
   // card to bring it round, on empty space to leave. Anywhere on the scene closes an open
   // card. A tap is a press that lifts again without having moved, so panning or turning the
@@ -362,7 +349,6 @@ export function createScene(
   const closeDetail = () => {
     if (detail === null) return
     detail = null
-    look.setPan(true)
     onDetail(null)
   }
 
@@ -429,17 +415,16 @@ export function createScene(
     const t = timer.getElapsed()
     now = t
 
-    const showProjects = view === 'projects'
     showWheel = view === 'wheel'
     showGrid = view === 'grid'
-    const showCards = showProjects || showWheel || showGrid
+    const showCards = showWheel || showGrid
     const insideBefore = inside
     inside = clamp(inside + (showCards ? dt : -dt) / 0.3, 0, 1)
     if (inside !== insideBefore) resize()
     const k = easeInOutCubic(inside)
-    // the cards only grow in the arrangement the view asks for; switching between the ring
-    // and the wheel shrinks them out first, then they come back in their new places
-    const wantMode = view === 'wheel' ? 'wheel' : view === 'grid' ? 'grid' : 'ring'
+    // the cards only grow in the arrangement the view asks for; switching between the wheel
+    // and the grid shrinks them out first, then they come back in their new places
+    const wantMode = view === 'grid' ? 'grid' : view === 'wheel' ? 'wheel' : cardsMode
     const growing = showCards && cardsMode === wantMode
     cardsTime = clamp(cardsTime + (growing ? dt : -dt * 4), 0, cardsDuration)
     if (cardsTime === 0 && cardsMode !== wantMode) {
@@ -459,8 +444,6 @@ export function createScene(
     const titleOpacity = 1
     title.uniforms.uOpacity.value = titleOpacity
     uniforms.uTime.value = t
-    ringAmount = damp(ringAmount, showProjects ? 1 : 0, 6, dt)
-    uniforms.uSectionAmount.value = k * ringAmount
     // pulse rings come from the viewer's side on the landing and from the top among the projects
     uniforms.uFacing.value.set(0, k, 1 - k).normalize()
 
@@ -518,8 +501,8 @@ export function createScene(
       if (detailBlend !== 0) {
         // the open card keeps the focus until it is back in its place
         next = detailCard
-      } else if (showProjects || showGrid) {
-        // the ring and the grid are aimed at with the lens at the centre of the screen
+      } else if (showGrid) {
+        // the grid is aimed at with the lens at the centre of the screen
         camera.updateMatrixWorld()
         raycaster.setFromCamera(centre, camera)
         const hit = raycaster.intersectObjects(bodies, false)[0]
@@ -532,13 +515,12 @@ export function createScene(
         next = wheel.selected
       }
 
-      if (tapped && (showProjects || showGrid)) {
+      if (tapped && showGrid) {
         if (detail !== null) {
           // the page folds the card's header back out first, then calls closeDetail
           onCloseRequest()
         } else if (detailBlend === 0 && next !== null) {
           detail = detailCard = next
-          look.setPan(false)
           onDetail(next)
         } else if (detailBlend === 0) {
           onExit()
@@ -553,7 +535,6 @@ export function createScene(
           const i = hit ? bodies.indexOf(hit.object as (typeof bodies)[number]) : -1
           if (i === wheel.selected) {
             detail = detailCard = i
-            look.setPan(false)
             onDetail(i)
           } else if (i >= 0) {
             wheel.snapTo(i)
@@ -570,10 +551,10 @@ export function createScene(
         // on the grid the cards are drawn smaller, so more of them fit under the lens
         const scale = Math.max(enter, 0.001) * (1 + FOCUS_SCALE * chosen) * (onTheGrid ? GRID_CARD_SCALE : 1)
         const group = card.group
-        if (onTheWheel) placeOnWheel(i)
-        else if (onTheGrid) placeOnGrid(i)
-        const homePosition = onTheWheel ? wheelPosition : onTheGrid ? gridPosition : homes[i].position
-        const homeQuaternion = onTheWheel ? wheelQuaternion : onTheGrid ? gridQuaternion : homes[i].quaternion
+        if (onTheGrid) placeOnGrid(i)
+        else placeOnWheel(i)
+        const homePosition = onTheGrid ? gridPosition : wheelPosition
+        const homeQuaternion = onTheGrid ? gridQuaternion : wheelQuaternion
         // on the wheel the cards not at the front stand back a little in the shade
         card.setDim(onTheWheel ? 1 - chosen : 0)
         // the card straightens out as it comes forward to be read
@@ -588,8 +569,8 @@ export function createScene(
           group.scale.setScalar(scale + (1 - scale) * open)
           group.visible = detailArrived < 0.3
         } else {
-          // in the ring the card gives way under the crosshair: whichever part is aimed at tips back
-          const pressed = i === next && detailBlend === 0 && (showProjects || showGrid)
+          // on the grid the card gives way under the crosshair: whichever part is aimed at tips back
+          const pressed = i === next && detailBlend === 0 && showGrid
           const pressX = press[i].x.update(pressed ? pressAt.x : 0, dt, 12, 0.6)
           const pressY = press[i].y.update(pressed ? pressAt.y : 0, dt, 12, 0.6)
           pressTilt.setFromEuler(pressEuler.set(-pressY * PRESS_TILT, pressX * PRESS_TILT, 0))
@@ -606,9 +587,6 @@ export function createScene(
     }
     tapped = false
     focused = next
-    if (focused !== null) uniforms.uFocusU.value = sectionU(focused)
-    // the dome lights up the chosen card's section, in the ring only
-    uniforms.uFocus.value = damp(uniforms.uFocus.value, focused === null || cardsMode !== 'ring' ? 0 : 1, 6, dt)
 
     // the dome covers every pixel, so only the depth buffer needs clearing
     renderer.clearDepth()
@@ -620,14 +598,14 @@ export function createScene(
     if (insertsVisible > 0.001) inserts.render(dt, insertsVisible)
 
     // the crosshair: a ring among the projects that turns to glass over a card, gone while one is open
-    lensAmount = damp(lensAmount, (showProjects || showGrid) && detail === null ? 1 : 0, 9, dt)
+    lensAmount = damp(lensAmount, showGrid && detail === null ? 1 : 0, 9, dt)
     // on its own spring, so it also morphs back to the ring when the aim leaves a card
     lensGlass = glass.update(focused === null ? 0 : 1, dt, 12, 0.6)
     lens.render(renderer, scene, camera, lensAmount, lensGlass)
   })
 
   return {
-    /** Send the open card back to its place in the ring. */
+    /** Send the open card back to its place. */
     closeDetail,
     /** A picture of card `i` exactly as the scene draws it, minus the photo. */
     cardImage: (i: number) => cards[i].image(),
@@ -639,10 +617,6 @@ export function createScene(
     },
     setView(next: View) {
       view = next
-      // only the ring is looked around by panning; on the wheel and the grid the finger
-      // moves the cards instead, and over the grid the view tips down to look at them
-      look.setMode(view === 'projects' ? 'drag' : 'parallax')
-      look.setBasePitch(view === 'grid' ? -Math.PI / 2 : 0)
     },
     dispose() {
       renderer.setAnimationLoop(null)
